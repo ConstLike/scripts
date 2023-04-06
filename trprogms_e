@@ -1,0 +1,2 @@
+
+gms_sbatch -i $1 -p trpro -c 32 -s `pwd` -v mrsfUHF -e /bighome/k.komarov/projects/gms-mrsf-uhf

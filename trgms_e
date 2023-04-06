@@ -1,0 +1,12 @@
+# Submit GAMESS job on KNU QChemLab cluster managed by Slurm workload manager
+#
+# Usage:
+#   gms_sbatch -i <input> [-v|--verno <version>] [-e|--exepath <exepath>] [-s|--userscr <user_scratch>] [<slurm_options>]
+#
+# Options:
+#   -i | --input   <input>           name of the GAMESS input file, with or without extension
+#   -v | --verno   <version>         runs gamess.<version>.x, default = 'konst'
+#   -e | --exepath <exepath>         path to look for executables, default = /home/share/local/sbin/gamess
+#   -s | --userscr <user_scratch>    user scratch folder to store important files, default = $HOME/scr
+
+gms_sbatch -i $1 -p trd -c 32 -s `pwd` -v mrsfUHF -e /bighome/k.komarov/projects/gms-mrsf-uhf

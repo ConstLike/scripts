@@ -1,0 +1,3 @@
+
+gms_sbatch -i $1 -p trd -c 32 -s `pwd`
+

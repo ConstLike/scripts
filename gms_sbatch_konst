@@ -1,0 +1,105 @@
+#!/bin/bash
+#
+#  last update = 22 Sep 2022
+#
+
+print_help() {
+      echo
+      echo " Submit GAMESS job on KNU QChemLab cluster managed by Slurm workload manager"
+      echo
+      echo " Usage:"
+      echo "   gms_sbatch -i <input> [-v|--verno <version>] [-e|--exepath <exepath>] [-s|--userscr <user_scratch>] [<slurm_options>]"
+      echo
+      echo " Options:"
+      echo "   -i | --input   <input>           name of the GAMESS input file, with or without extension"
+      echo "   -v | --verno   <version>         runs gamess.<version>.x, default = 'konst'"
+      echo "   -e | --exepath <exepath>         path to look for executables, default = /home/share/local/sbin/gamess"
+      echo "   -s | --userscr <user_scratch>    user scratch folder to store important files, default = \$HOME/scr"
+      echo "        --basis   <basis_file>      path to the file with external basis set, default = /dev/null"
+      echo
+      echo " Other options:"
+      echo "   <slurm_options>   all unknown arguments will be passed directly to Slurm"
+      echo
+}
+
+VERNO=konst
+EXEPATH=/home/share/local/sbin/gamess
+USERSCR=~/scr
+
+SLURM_ARGS=""
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -i|--input)
+      INP="$2"
+      shift # past argument
+      shift # past value
+      ;;
+    --basis)
+      EXTBAS="$2"
+      export EXTBAS
+      shift # past argument
+      shift # past value
+      ;;
+    -e|--exepath)
+      EXEPATH="$2"
+      shift # past argument
+      shift # past value
+      ;;
+    -v|--verno)
+      VERNO="$2"
+      shift # past argument
+      shift # past value
+      ;;
+    -s|--userscr)
+      USERSCR="$2"
+      shift # past argument
+      shift # past value
+      ;;
+    -h|--help)
+      print_help
+      exit 0
+      ;;
+    *)
+      SLURM_ARGS="$SLURM_ARGS $1" # save unknown arg for Slurm
+      shift # past argument
+      ;;
+  esac
+done
+
+if [ -z $INP ]
+then
+  echo "No input file name specified"
+  echo "Please fix your file name problem, and resubmit."
+  print_help
+  exit 4
+fi
+
+if [ ! -f "$INP" ]
+then
+  echo "Input file $INP does not exist."
+  echo "This job expected the input file to be in directory $(pwd)"
+  echo "Please fix your file name problem, and resubmit."
+  print_help
+  exit 4
+fi
+
+#  Just make sure we have the binaries, before we try to run
+if [ ! -f "$EXEPATH/gamess.$VERNO.x" ] || [ ! -f "$EXEPATH/ddikick.$VERNO.x" ]
+then
+  echo The GAMESS executable gamess.$VERNO.x or else
+  echo the DDIKICK executable ddikick.$VERNO.x
+  echo could not be found in directory $EXEPATH,
+  echo or else they did not properly link to executable permission.
+  print_help
+  exit 8
+fi
+
+JOB=$(basename ${INP%.*})
+
+sbatch $SLURM_ARGS --job-name "$JOB" \
+    -m block:cyclic:block \
+    -- \
+    /bighome/k.komarov/scripts/rungms.slurm.base.konst \
+        "$INP" "$VERNO" "$EXEPATH" "$USERSCR"
+
