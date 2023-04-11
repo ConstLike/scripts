@@ -77,11 +77,13 @@ if __name__ == '__main__':
     for i in range(np.size(files)-1):
         file_a = files[i]+".log"
         file_b = files[i+1]+".log"
-        print(file_a)
-        print(file_b)
+        print('A:',file_a)
+        print('B:',file_b)
+        print('   A <- B    A, eV     B, eV  Max Overlap')
         c_a, energy_a, n_homo = Extract_data(file_a)
         c_b, energy_b, n_homo = Extract_data(file_b)
-
+        energy_a*= 27.2114 # Hartree to Ev.
+        energy_b*= 27.2114
         overlap = get_overlap(c_a, c_b)
 
 #       print_overlap(c_a, c_b)
@@ -97,10 +99,10 @@ if __name__ == '__main__':
             pr[maxloc] = True
             locs[i] = maxloc
 
-            print('%3i' % (i+1),
-                  '%3i' %  (maxloc+1),
-                  '%8.3f' % energy_a[i],
-                  '%8.3f' % energy_b[i],
+            print('%4i' % (i+1),
+                  '%4i' %  (maxloc+1),
+                  '%9.3f' % energy_a[i],
+                  '%9.3f' % energy_b[i],
                   '%6.3f' % maxval,
                   end='')
             if (i == n_homo):

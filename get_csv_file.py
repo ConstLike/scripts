@@ -234,6 +234,7 @@ def extract_basis(file):
     molecule = str(file.split("_")[2])
     basis = str(file.split("_")[3])
     num_opt = np.size( file.split("_"))
+    dfttype = str(file.split("_")[4]).upper()
     option = ""
     if num_opt==5:
         dfttype = str(file.split("_")[4].split(".")[0]).upper()
