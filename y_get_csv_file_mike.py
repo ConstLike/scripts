@@ -9,7 +9,7 @@ import numpy as np
 import argparse
 import csv
 
-def Extract_data(file_name):
+def Extract_data(file_name,index):
     f = open(file_name, 'r', encoding='ISO-8859-1')
     file_data = f.read().splitlines()
     f.close()
@@ -43,6 +43,15 @@ def Extract_data(file_name):
     if tddft.lower() == 'mrsfs':
         tddft_out = "MRSF_singlet"
         l_mrsfs = True
+    if tddft.lower() == 'mrsfs-mrscal':
+        tddft_out = "MRSF_singlet_mrscal"
+        l_mrsfs = True
+    if tddft.lower() == 'mrsfs-spc-cc-vv':
+        tddft_out = "MRSF_singlet_spc_cc_vv"
+        l_mrsfs = True
+    elif tddft.lower() == 'mrsf':
+        tddft_out = "MRSF_singlet"
+        l_mrsfs = True
     elif tddft.lower() == 'mrsft':
         tddft_out = "MRSF_triplet"
         l_mrsft = True
@@ -60,6 +69,9 @@ def Extract_data(file_name):
     state_energy_Hartree = 0.0
     state_location_in_log = []
     range_of_transitions = []
+    state_transt_dominant = []
+    state_transt = []
+    nstate = 0
     for il, l in enumerate(file_data):
 
         if "TDDFT INPUT PARAMETERS" in l:
@@ -74,13 +86,54 @@ def Extract_data(file_name):
         elif "TOTAL NUMBER OF MOS IN VARIATION" in l:
             number_of_bf = int(file_data[il].split()[7])
 
+        states = range(1,nstate+1)
+        for i in states:
+            length = 4
+            step = int(length-len(str(i)))
+            if "STATE #"+' '*step+str(i)+"  ENERGY" in l:
+                state_location_in_log.append(int(il))
+
         if "SUMMARY OF" in l:
             step = 0; mrs = False
             if l_mrsfs or l_mrsft:
+                for i in [*range(nstate-1)]:
+                    step = state_location_in_log[i+1]-state_location_in_log[i]-6
+                    range_of_transitions.append(int(step))
+                range_of_transitions.append(int(il-state_location_in_log[nstate-1]-7))
+                for i in [*range(nstate)]:
+                    tmp = []
+                    for j in [*range(range_of_transitions[i])]:
+                        state_excite_Occ = int(file_data[state_location_in_log[i]+j+5].split()[2])
+                        state_excited_Vir = int(file_data[state_location_in_log[i]+j+5].split()[4])
+                        state_excite_Coeff = float(file_data[state_location_in_log[i]+j+5].split()[1])
+                        row = (state_excite_Occ,state_excited_Vir,state_excite_Coeff)
+                        tmp.append(row)
+                    tmp = sorted(tmp, key=lambda term: (abs(term[2]), term[2]), reverse=True)
+                    state_transt.append(tmp)
+                    state_transt_dominant.append(tmp[0])
                 step = il+7; mrs = True
             elif l_sf:
+                for i in [*range(nstate-1)]:
+                    step = state_location_in_log[i+1]-state_location_in_log[i]-6
+                    range_of_transitions.append(int(step))
+                range_of_transitions.append(int(il-state_location_in_log[nstate-1]-7))
+                for i in [*range(nstate)]:
+                    tmp = []
+                    for j in [*range(range_of_transitions[i])]:
+                        state_excite_Occ = int(file_data[state_location_in_log[i]+j+5].split()[2])
+                        state_excited_Vir = int(file_data[state_location_in_log[i]+j+5].split()[4])
+                        state_excite_Coeff = float(file_data[state_location_in_log[i]+j+5].split()[1])
+                        row = (state_excite_Occ,state_excited_Vir,state_excite_Coeff)
+                        tmp.append(row)
+                    tmp = sorted(tmp, key=lambda term: (abs(term[2]), term[2]), reverse=True)
+                    state_transt.append(tmp)
+                    state_transt_dominant.append(tmp[0])
                 step = il+6
             elif l_tds or l_tdt:
+                for i in [*range(nstate)]:
+                    tmp = 0
+                    state_transt.append(tmp)
+                    state_transt_dominant.append(tmp)
                 step = il+4; mrs = True
 
             k = 0
@@ -143,13 +196,17 @@ def Extract_data(file_name):
                        number_of_state,
                        state_energy_eV_GS,
                        state_symmetry,
+                       str(state_transt_dominant[j]),
                        state_squared_S,
+                       str(state_transt[j]),
                        state_transition_dipole_x,
                        state_transition_dipole_y,
                        state_transition_dipole_z,
                        state_oscillator_strength,
                        number_of_bf,
                        mol_symmetry,
+                       total_energy_Hartree,
+                       index,
                        file_name,
                        )
 
@@ -167,7 +224,11 @@ def extract_basis(file):
     tddft = str(file.split("_")[1])
     molecule = str(file.split("_")[2])
     basis = str(file.split("_")[3])
-    dfttype = str(file.split("_")[4].split('.')[0])
+    point = file.split("_")[4].count(".")
+    if point == 0:
+        dfttype = str(file.split("_")[4])
+    else:
+        dfttype = str(file.split("_")[4].split('.')[0])
 
     if basis=="631gd":
         basis_out = "6-31G(d)"
@@ -225,13 +286,17 @@ if __name__ == '__main__':
               "number_of_state",
               "state_energy_eV_GS",
               "state_symmetry",
+              "state_dominant_trans",
               "state_squared_S",
+              "state_transition",
               "state_transition_dipole_x",
               "state_transition_dipole_y",
               "state_transition_dipole_z",
               "state_oscillator_strength",
               "Number_of_bf",
               "Mol_symmetry",
+              "total_energy_Hartree",
+              "log_index",
               "Log_file"]
 
     data = []
@@ -240,6 +305,7 @@ if __name__ == '__main__':
     with open(output_file, 'w', newline='', encoding='ISO-8859-1') as f:
         writer = csv.writer(f, delimiter=';')
         writer.writerow(header)
+        index = 0
         for file in files:
             status = Check_file(file)
             if status:
@@ -247,7 +313,8 @@ if __name__ == '__main__':
             else:
                 ii += 1
                 print(ii, file)
-                summary_rows =  Extract_data(file)
+                index+=1
+                summary_rows =  Extract_data(file,index)
                 for j in summary_rows:
                     writer.writerow(j)
 
