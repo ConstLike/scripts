@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
 import argparse
 import re
@@ -34,16 +34,16 @@ if __name__ == '__main__':
     what = 0
     natom = 0
 
-#   print(' $data')
+    print(' $DATA')
     with open(filename, "r") as f:
 
         for linenum, line in enumerate(f):
             # get number of atoms
             if linenum == 0:
                 natom = int(line)
-#           elif linenum == 1:
-#               print(line.strip())
-#               print('C1')
+            elif linenum == 1:
+                print(line.strip())
+                print('C1')
             elif linenum == natom + 2:
                 break
             else:
@@ -53,5 +53,4 @@ if __name__ == '__main__':
                 y = float(y)
                 z = float(z)
                 print(f'{elem:10s}{q:5.1f}{x:20.10f}{y:20.10f}{z:20.10f}')
-#   print(' $end')
-
+    print(' $END')

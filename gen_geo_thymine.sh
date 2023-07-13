@@ -1,7 +1,7 @@
 #!/bin/bash
 
 awk -v c1="$1" '{
-	TOT_NAT=10
+	TOT_NAT=15
 	if($1=="Frame" && $2==c1)
 	{
 	for(i=1;i<=TOT_NAT;i++)

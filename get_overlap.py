@@ -72,11 +72,11 @@ if __name__ == '__main__':
     arg = command_line_args()
     files = open(arg.input,"r").read().splitlines()
 
-    n_orb = 48
+    n_orb = 1000
 
     for i in range(np.size(files)-1):
-        file_a = files[i]+".log"
-        file_b = files[i+1]+".log"
+        file_a = files[i]
+        file_b = files[i+1]
         print('A:',file_a)
         print('B:',file_b)
         print('   A <- B    A, eV     B, eV  Max Overlap')
@@ -103,7 +103,7 @@ if __name__ == '__main__':
                   '%4i' %  (maxloc+1),
                   '%9.3f' % energy_a[i],
                   '%9.3f' % energy_b[i],
-                  '%6.3f' % maxval,
+                  '%9.6f' % maxval,
                   end='')
             if (i == n_homo):
                 print(" homo", end='')

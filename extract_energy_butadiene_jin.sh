@@ -41,7 +41,8 @@ awk -v ref="$1" '{if($1=="INPUT" && $2="CARD>" && $3=="C1")
               Double = (r1+r3)/2
               Single = r2
 
-              BLA = Double - Single
+#             BLA = Double - Single
+              BLA = Single - Double
 
               printf("%.5f\t", BLA);
               printf("%.5f\t", r1);

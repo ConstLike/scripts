@@ -1,4 +1,2 @@
- $guess guess=moread $end
- $dft switch=0 swoff=0 $end
  $contrl tddft=mrsf $end
- $tddft nstate=10 iroot=1 tammd=.t. mult=3 $end
+ $tddft nstate=30 tammd=.t. mult=3 $end

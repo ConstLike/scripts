@@ -1,0 +1,1 @@
+ $contrl dfttyp=tpssh $end

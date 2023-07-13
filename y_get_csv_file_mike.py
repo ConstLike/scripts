@@ -29,6 +29,12 @@ def Extract_data(file_name,index):
     state_oscillator_strength = 0.0
     mol_symmetry = ''
     number_of_bf = 0
+    mrsf_betac = 0.0
+    mrsf_hf = 0.0
+    mrsf_aee = 0.0
+    mrsf_beta = 0.0
+    mrsf_spc = 0.0
+    number_of_bf = 0
 #   file_name = ''
 
     summary_table = []
@@ -41,10 +47,22 @@ def Extract_data(file_name,index):
     l_tds = False
     l_tdt = False
     if tddft.lower() == 'mrsfs':
-        tddft_out = "MRSF_singlet"
+        tddft_out = "MRSF"
+        l_mrsfs = True
+    if tddft.lower() == 'mrsfs-momba':
+        tddft_out = "MRSF-MOMBA"
+        l_mrsfs = True
+    if tddft.lower() == 'mrsfs-mramo':
+        tddft_out = "MRSF-AAMO"
         l_mrsfs = True
     if tddft.lower() == 'mrsfs-mrscal':
-        tddft_out = "MRSF_singlet_mrscal"
+        tddft_out = "AEE"
+        l_mrsfs = True
+    if tddft.lower() == 'mrsfs-mrscal-spc':
+        tddft_out = "MRSF_singlet_mrscal_spc"
+        l_mrsfs = True
+    if tddft.lower() == 'mrsfs-mrscal-nospc':
+        tddft_out = "MRSF_singlet_mrscal_nospc"
         l_mrsfs = True
     if tddft.lower() == 'mrsfs-spc-cc-vv':
         tddft_out = "MRSF_singlet_spc_cc_vv"
@@ -72,6 +90,8 @@ def Extract_data(file_name,index):
     state_transt_dominant = []
     state_transt = []
     nstate = 0
+    non_abel = False
+    camflag = False
     for il, l in enumerate(file_data):
 
         if "TDDFT INPUT PARAMETERS" in l:
@@ -86,6 +106,11 @@ def Extract_data(file_name,index):
         elif "TOTAL NUMBER OF MOS IN VARIATION" in l:
             number_of_bf = int(file_data[il].split()[7])
 
+        elif "SOME STATE SYMMETRY LABELS MAY NOT BE CORRECTLY PRINTED BELOW" in l:
+            non_abel = True
+        if "CAM-MRSF" in l:
+            camflag = True
+
         states = range(1,nstate+1)
         for i in states:
             length = 4
@@ -93,13 +118,35 @@ def Extract_data(file_name,index):
             if "STATE #"+' '*step+str(i)+"  ENERGY" in l:
                 state_location_in_log.append(int(il))
 
+#        if l_mrsfs or l_mrsft:
+#            if "SPIN-PAIRING COUPLINGS" in l:
+#                mrsf_hf = float(file_data[il+2].split()[0])
+#                mrsf_aee = float(file_data[il+2].split()[1])
+#                mrsf_spc = float(file_data[il+2].split()[2])
+
+        if l_mrsfs or l_mrsft:
+            if "FITTING PARAMETERS OF MRSF RESPONSE CALCULATION" in l:
+                if camflag:
+                    mrsf_aee = float(file_data[il+2].split()[1])
+                    mrsf_beta = float(file_data[il+2].split()[2])
+                    mrsf_hf = float(file_data[il+8].split()[1])
+                    mrsf_betac = float(file_data[il+8].split()[2])
+                    mrsf_spc = float(file_data[il+5].split()[2])
+                else:
+                    mrsf_aee = float(file_data[il+2].split()[0])
+                    mrsf_spc = float(file_data[il+5].split()[2])
+                    mrsf_hf = float(file_data[il+8].split()[0])
+
         if "SUMMARY OF" in l:
             step = 0; mrs = False
             if l_mrsfs or l_mrsft:
                 for i in [*range(nstate-1)]:
                     step = state_location_in_log[i+1]-state_location_in_log[i]-6
                     range_of_transitions.append(int(step))
-                range_of_transitions.append(int(il-state_location_in_log[nstate-1]-7))
+                if non_abel:
+                    range_of_transitions.append(int(il-state_location_in_log[nstate-1]-11))
+                else:
+                    range_of_transitions.append(int(il-state_location_in_log[nstate-1]-7))
                 for i in [*range(nstate)]:
                     tmp = []
                     for j in [*range(range_of_transitions[i])]:
@@ -116,7 +163,10 @@ def Extract_data(file_name,index):
                 for i in [*range(nstate-1)]:
                     step = state_location_in_log[i+1]-state_location_in_log[i]-6
                     range_of_transitions.append(int(step))
-                range_of_transitions.append(int(il-state_location_in_log[nstate-1]-7))
+                if non_abel:
+                    range_of_transitions.append(int(il-state_location_in_log[nstate-1]-11))
+                else:
+                    range_of_transitions.append(int(il-state_location_in_log[nstate-1]-7))
                 for i in [*range(nstate)]:
                     tmp = []
                     for j in [*range(range_of_transitions[i])]:
@@ -162,10 +212,10 @@ def Extract_data(file_name,index):
                         k+=1
 
                 number_of_state = iS
-                state_symmetry = str(file_data[step+k].split()[1])
-                state_energy_Hartree = float(file_data[step+k].split()[2])
 
                 if l_mrsfs or l_mrsft:
+                    state_symmetry = str(file_data[step+k].split()[1])
+                    state_energy_Hartree = float(file_data[step+k].split()[2])
                     state_energy_eV_GS = (state_energy_Hartree-GS)*27.2107
                     state_squared_S = float(file_data[step+k].split()[4])
                     state_transition_dipole_x = float(file_data[step+k].split()[5])
@@ -175,12 +225,23 @@ def Extract_data(file_name,index):
                 elif l_tds or l_tdt:
                     if l_tds: state_squared_S = 0.0
                     if l_tdt: state_squared_S = 2.0
+                    kk = k-1
+                    state_symmetry = str(file_data[step+kk].split()[1])
+                    state_energy_Hartree = float(file_data[step+kk].split()[2])
                     state_energy_eV_GS = (state_energy_Hartree-total_energy_Hartree)*27.2107
-                    state_transition_dipole_x = float(file_data[step+k].split()[4])
-                    state_transition_dipole_y = float(file_data[step+k].split()[5])
-                    state_transition_dipole_z = float(file_data[step+k].split()[6])
-                    state_oscillator_strength = float(file_data[step+k].split()[7])
+                    if int(file_data[step+kk].split()[0]) == 0:
+                        state_transition_dipole_x = 0.0
+                        state_transition_dipole_y = 0.0
+                        state_transition_dipole_z = 0.0
+                        state_oscillator_strength = 0.0
+                    else:
+                        state_transition_dipole_x = float(file_data[step+kk].split()[4])
+                        state_transition_dipole_y = float(file_data[step+kk].split()[5])
+                        state_transition_dipole_z = float(file_data[step+kk].split()[6])
+                        state_oscillator_strength = float(file_data[step+kk].split()[7])
                 elif l_sf:
+                    state_symmetry = str(file_data[step+k].split()[1])
+                    state_energy_Hartree = float(file_data[step+k].split()[2])
                     state_energy_eV_GS = (state_energy_Hartree-GS)*27.2107
                     state_squared_S = float(file_data[step+k].split()[4])
                     state_transition_dipole_x = ''
@@ -207,6 +268,11 @@ def Extract_data(file_name,index):
                        mol_symmetry,
                        total_energy_Hartree,
                        index,
+                       mrsf_hf,
+                       mrsf_betac,
+                       mrsf_aee,
+                       mrsf_beta,
+                       mrsf_spc,
                        file_name,
                        )
 
@@ -233,6 +299,8 @@ def extract_basis(file):
     if basis=="631gd":
         basis_out = "6-31G(d)"
     elif basis=="631gss":
+        basis_out = "6-31G(d,p)"
+    elif basis=="631gdp":
         basis_out = "6-31G(d,p)"
     elif basis=="ccd":
         basis_out = "cc-pVDZ"
@@ -297,6 +365,11 @@ if __name__ == '__main__':
               "Mol_symmetry",
               "total_energy_Hartree",
               "log_index",
+              "mrsf_hf",
+              "mrsf_betac",
+              "mrsf_aee",
+              "mrsf_beta",
+              "mrsf_spc",
               "Log_file"]
 
     data = []

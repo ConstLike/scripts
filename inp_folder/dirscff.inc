@@ -1,0 +1,1 @@
+ $scf dirscf=.f. $end
