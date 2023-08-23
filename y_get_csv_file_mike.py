@@ -39,7 +39,7 @@ def Extract_data(file_name,index):
 
     summary_table = []
 
-    scftype, tddft, molecule, basis_out, dfttype  = extract_basis(file)
+    scftype, tddft, molecule, basis_out, dfttype = extract_basis(file)
 
     l_mrsfs = False
     l_mrsft = False
@@ -49,8 +49,19 @@ def Extract_data(file_name,index):
     if tddft.lower() == 'mrsfs':
         tddft_out = "MRSF"
         l_mrsfs = True
-    if tddft.lower() == 'mrsfs-momba':
-        tddft_out = "MRSF-MOMBA"
+    if tddft.lower() == 'mrsfs-momoo':
+        tddft_out = "MRSF-MOMOO"
+        l_mrsfs = True
+    if tddft.lower() == 'mrsft-momoo':
+        tddft_out = "MRSF-t-MOMOO"
+        l_mrsfs = True
+    if tddft.lower() == 'mrsfs-aee-momoo':
+        tddft_out = "MRSF-MOMOO"
+        dfttype = "DTCAM-AEE"
+        l_mrsfs = True
+    if tddft.lower() == 'mrsfs-vee-momoo':
+        tddft_out = "MRSF-MOMOO"
+        dfttype = "DTCAM-VEE"
         l_mrsfs = True
     if tddft.lower() == 'mrsfs-mramo':
         tddft_out = "MRSF-AAMO"
@@ -92,10 +103,16 @@ def Extract_data(file_name,index):
     nstate = 0
     non_abel = False
     camflag = False
+    flagsoc = False
     for il, l in enumerate(file_data):
+
+        if "mrsoc=.t." in l:
+            flagsoc = True
 
         if "TDDFT INPUT PARAMETERS" in l:
             nstate = int(file_data[il+2].split()[1])
+            if flagsoc:
+                nstate = nstate*2
 
         if "INPUT CARD> $DATA" in l.lower():
             mol_symmetry = str(file_data[il+2].split()[2])
@@ -256,6 +273,7 @@ def Extract_data(file_name,index):
                        molecule,
                        number_of_state,
                        state_energy_eV_GS,
+                       state_energy_Hartree,
                        state_symmetry,
                        str(state_transt_dominant[j]),
                        state_squared_S,
@@ -298,6 +316,8 @@ def extract_basis(file):
 
     if basis=="631gd":
         basis_out = "6-31G(d)"
+    elif basis=="631g":
+        basis_out = "6-31G"
     elif basis=="631gss":
         basis_out = "6-31G(d,p)"
     elif basis=="631gdp":
@@ -353,6 +373,7 @@ if __name__ == '__main__':
               "molecule",
               "number_of_state",
               "state_energy_eV_GS",
+              "state_energy_Hartree",
               "state_symmetry",
               "state_dominant_trans",
               "state_squared_S",

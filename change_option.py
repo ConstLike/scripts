@@ -40,14 +40,21 @@ if __name__ == '__main__':
 
         # for ROHF
 #       file_inp = file_inp.replace("diis=.f.","diis=.t.").replace("soscf=.t.","soscf=.f.")
-#       file_inp = file_inp.replace('fdiff=.t.','fdiff=.f.')
-#       file_inp = file_inp.replace('damp=.f.','damp=.t.')
+#       file_inp = file_inp.replace("diis=.t.","diis=.f.").replace("soscf=.f.","soscf=.t.")
+#       file_inp = file_inp.replace('dirscf=.f.','dirscf=.t.')
+#       file_inp = file_inp.replace('dfttyp=svwn','dfttyp=libxc')
+#       file_inp = file_inp.replace('alp=0.15','mralp=0.15')
+#       file_inp = file_inp.replace('alp=0.48','mralp=0.48')
+#       file_inp = file_inp.replace('betac=0.95','mrbet=0.95')
+#       file_inp = file_inp.replace('betac=0.0','mrbet=0.0')
+        file_inp = file_inp.replace('TDDFT=SPNFLP','tddft=mrsf')
 #       file_inp = file_inp.replace('shift=.t.','shift=.f.')
 #       file_inp = file_inp.replace("$tddft mralp=0.5 mrbet=0.0 $end","")
 #       file_inp = file_inp.replace("swdiis=0.000","swdiis=0.002")
 #       file_inp = file_inp.replace("$scf swdiis=0.005 ethrsh=1.5 $end","")
         file_inp = file_inp.splitlines(True)
-        file_inp.insert(12," $scf momoo=.t. $end\n")
+#       file_inp.insert(8," $tddft mrsoc=.t. $end\n")
+#       file_inp.insert(8," $transt $end\n")
 #       file_inp.insert(7," $guess guess=hcore $end\n")
 #       file_inp.append(" \n $scf swdiis=0.005 diis=.t. ethrsh=2.0 $end")
 #       file_inp.append(" \n $scf CONV=1.0d-04 $end")
@@ -94,7 +101,7 @@ if __name__ == '__main__':
 #       for iline in output:
 #           f_out.write(str(iline))
 #       f_out.close()
-        sub = 'gms_sbatch2 -i '+file+' -p "r630,ryzn"  -s `pwd` -v ukonst -e /bighome/k.komarov/projects/gms-mrsf-uhf\n'
+        sub = 'gms_sbatch2 -i '+file+' -p "r630,ryzn"  -s `pwd`\n'
 #       sub = 'gms_sbatch2 -i '+file+' -p trpro -n 16 -s `pwd`\n'
 
         f_sub.write(sub)

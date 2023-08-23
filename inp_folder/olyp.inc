@@ -1,1 +1,2 @@
- $contrl dfttyp=olyp $end
+ $contrl dfttyp=USElibxc $end
+ $libxc functional=olyp $end
