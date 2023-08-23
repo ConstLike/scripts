@@ -1,0 +1,8 @@
+----- GAMESS execution script -----
+This job is running on host chc4.knu.ac.kr
+under operating system Linux at Tue Aug 15 15:46:23 KST 2023
+Number of nodes: 1
+Nodelist:        chc4
+CPUs per node:   2
+Generated hostlist:  chc4:cpus=2:aff=-2,-2
+Tue Aug 15 15:46:26 KST 2023

@@ -1,0 +1,48 @@
+ $contrl
+   runtyp=gradnac
+   scftyp=rohf
+   mult=3
+   dfttyp=bhhlyp
+   icharg=0
+   tddft=mrsf
+   maxit=200
+   coord=unique
+ $end
+ $dft
+   sg1=.t.
+ $end
+ $scf
+   dirscf=.t.
+   diis=.t.
+   soscf=.f.
+   fdiff=.f.
+   damp=.f.
+   shift=.f.
+   nconv=6
+   npunch=2
+ $end
+ $tddft
+   nstate=3
+   iroot=2
+   tammd=.t.
+   mult=1
+ $end
+ $basis
+   gbasis=n31
+   ngauss=6
+   ndfunc=1
+ $end
+ $system
+   timlim=999999100
+   mwords=500
+ $end
+ $data
+
+ C1
+C           6.0        1.6061813124        1.5137823403       -1.8532304826
+C           6.0        1.8297205990        2.1532622299       -2.9306336720
+H           1.0        0.7837299323        1.8554701101       -1.2254340077
+H           1.0        2.0660759361        0.5856132304       -1.5511271763
+H           1.0        1.3951698698        3.0534395286       -3.1447814659
+H           1.0        2.3888191426        1.8772741027       -3.7592528319
+ $end
