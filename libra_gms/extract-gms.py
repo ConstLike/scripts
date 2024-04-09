@@ -1,7 +1,7 @@
 import re
 import numpy as np
 
-def parse(dat,log):
+def parse(dat):
 
     data = dat
 
@@ -16,13 +16,13 @@ def parse(dat,log):
         step_number = int(step_match.group(1))
 
         print(section)
-        info = parse_blocks(section, log)
+        info = parse_blocks(section)
 
         info_data[step_number] = info
 
     return info_data
 
-def parse_blocks(dat,log):
+def parse_blocks(dat):
     info = {}
     data = dat
 
@@ -171,31 +171,43 @@ def parse_blocks(dat,log):
     print('checl1')
     return info
 
-def parse_total_energy(data):
+def command_line_args():
 
-    pattern = re.compile(r"TOTAL ENERGY\s*=\s*(-?\d+\.\d+)")
-
-    match = pattern.search(data)
-
-    return float(match.group(1))
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-i', '--input',
+                        type=str,
+                        help='Provide the list of files')
+    parser.add_argument('-e', '--extension',
+                        type=str,
+                        help='Provide the extension of files')
+    return parser.parse_args()
 
 def main():
-    file_dat = "butadiene-gradnac-mrsf-singlet_step_1.wrf"
-    file_log = "butadiene-gradnac-mrsf-singlet_step_1.log"
-    dat = open(file_dat,'r').read()
-    log = open(file_log,'r').read()
-    info = parse(dat,log)
-    matrix1 = np.array(info[0]['MO_orbitals'])
-    matrix2 = np.array(info[1]['MO_orbitals'])
-    matrix = matrix1-matrix2
-#   print(matrix)
 
-    state=1
-    mat1 = np.array(info[0]['Xvector'][state]['excited_state_vector'])
-    mat2 = np.array(info[1]['Xvector'][state]['excited_state_vector'])
+    arg = command_line_args()
+    fls = arg.input.split('.')[0]
+
+    with open(geo.data, 'w') as out:
+
+        files = open(fls,"r").read().splitlines()
+
+        for file in files:
+
+            file_dat = file+"."+arg.extension
+            dat = open(file_dat,'r').read()
+            info = parse_blocks(dat)
+
+            for i in  info['Geometry']:
+                print(i)
+#       matrix1 = np.array(info[0]['MO_orbitals'])
+#       matrix2 = np.array(info[1]['MO_orbitals'])
+#       matrix = matrix1-matrix2
+#       print(matrix)
+
+        #state=1
+        #mat1 = np.array(info[0]['Xvector'][state]['excited_state_vector'])
+        #mat2 = np.array(info[1]['Xvector'][state]['excited_state_vector'])
 #   print(mat1-mat2)
-    print(info[1]['Total_energy'])
-    print(info[0]['Total_energy'])
 
 
 if __name__ == "__main__":
