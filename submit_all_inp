@@ -1,0 +1,5 @@
+#!/bin/bash
+
+for fname in *.inp; do
+    gms_sbatch2 -i "${fname}" -s "$(pwd)" --partition "r630,ryzn" --exclusive
+done
