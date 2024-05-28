@@ -1,8 +1,6 @@
-#!/usr/bin/env python3.6
-import fileinput
-import numpy as np
-import sys
+#!/usr/bin/env python3
 import os
+
 
 def command_line_args():
     import argparse
@@ -20,6 +18,7 @@ def command_line_args():
 
     return parser.parse_args()
 
+
 if __name__ == '__main__':
 
     arg = command_line_args()
@@ -27,27 +26,26 @@ if __name__ == '__main__':
     make_orbital = arg.orbital
     file_dir = os.path.dirname(os.path.realpath('__file__'))
     file_names = os.path.join(file_dir, name_files)
-    inputs = open(str(file_names),"r").read()
+    inputs = open(str(file_names), "r").read()
     files = inputs.splitlines()
 
-    opt = ''
-    f_name = os.path.join(file_dir,'y_resubmite')
-    f_sub = open(f_name, 'w')
     for file in files:
-        f = open(file,"r")
+        f = open(file, "r")
         file_inp = f.read()
         f.close()
 
         # for ROHF
-#       file_inp = file_inp.replace("diis=.f.","diis=.t.").replace("soscf=.t.","soscf=.f.")
-#       file_inp = file_inp.replace("diis=.t.","diis=.f.").replace("soscf=.f.","soscf=.t.")
+#       file_inp = file_inp.replace('save_mol=False', 'save_mol=True')
+#       file_inp = file_inp.replace('maxit=15', 'maxit=30')
+        file_inp = file_inp.replace('save_mol=True', 'save_mol=False')
+#       file_inp = file_inp.replace('conv=1.0e-9', 'conv=1.0e-8')
 #       file_inp = file_inp.replace('dirscf=.f.','dirscf=.t.')
 #       file_inp = file_inp.replace('dfttyp=svwn','dfttyp=libxc')
 #       file_inp = file_inp.replace('alp=0.15','mralp=0.15')
 #       file_inp = file_inp.replace('alp=0.48','mralp=0.48')
 #       file_inp = file_inp.replace('betac=0.95','mrbet=0.95')
 #       file_inp = file_inp.replace('betac=0.0','mrbet=0.0')
-        file_inp = file_inp.replace('TDDFT=SPNFLP','tddft=mrsf')
+#       file_inp = file_inp.replace('TDDFT=SPNFLP','tddft=mrsf')
 #       file_inp = file_inp.replace('shift=.t.','shift=.f.')
 #       file_inp = file_inp.replace("$tddft mralp=0.5 mrbet=0.0 $end","")
 #       file_inp = file_inp.replace("swdiis=0.000","swdiis=0.002")
@@ -70,11 +68,7 @@ if __name__ == '__main__':
 #           file_inp.insert(5,i)
 
         f_out = open(file, 'w')
-        guess=False
-        for il, l  in enumerate(file_inp):
-#           if 'guess=moread' in l:
-#               guess=True
-#               break
+        for il, l in enumerate(file_inp):
             f_out.write(str(l))
 
 #       output = []
@@ -100,10 +94,4 @@ if __name__ == '__main__':
 
 #       for iline in output:
 #           f_out.write(str(iline))
-#       f_out.close()
-        sub = 'gms_sbatch2 -i '+file+' -p "r630,ryzn"  -s `pwd`\n'
-#       sub = 'gms_sbatch2 -i '+file+' -p trpro -n 16 -s `pwd`\n'
-
-        f_sub.write(sub)
-    f_sub.close()
-
+        f_out.close()

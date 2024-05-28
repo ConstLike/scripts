@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+
+# Developed by Konstantin Komarov.
 
 class ConfigurationGenerator:
     def __init__(self, methods, basis_sets, functionals, scftypes):
@@ -19,9 +22,6 @@ class ConfigurationGenerator:
                     for scftype in self.scftypes:
                         scf_mult = 1 if scftype in ('rhf', 'uhf-s') else 3
                         scf = scftype.split('-')[0]
-
-                        if scf == 'uhf':
-                            continue
 
                         tddft_options = []
                         if method == "tdhf":
