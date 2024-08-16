@@ -2,6 +2,8 @@
 
 # Developed by Konstantin Komarov.
 import os
+import numpy as np
+
 
 class ConfigurationGenerator:
     def __init__(self, methods, basis_sets, functionals, scftypes, tddfttypes, xyz_file, include_hf=True):
@@ -11,6 +13,7 @@ class ConfigurationGenerator:
         self.scftypes = scftypes
         self.tddfttypes = tddfttypes
         self.system_geometry = self.read_xyz_file(xyz_file)
+        self.name_xyz = self.extract_xyz_name(xyz_file)
         self.include_hf = include_hf
 
     def read_xyz_file(self, xyz_file):
@@ -26,10 +29,13 @@ class ConfigurationGenerator:
                 parts = line.split()
                 if len(parts) == 4:
                     atom, x, y, z = parts
-                    atom_number = atom_numbers.get(atom, 0)
-                    geometry.append(f"{atom_number:2d} {float(x):14.9f} {float(y):14.9f} {float(z):14.9f}")
+                    geometry.append(f" {atom} {float(x):14.9f} {float(y):14.9f} {float(z):14.9f}")
 
         return "\n".join(geometry)
+
+
+    def extract_xyz_name(self, xyz_file):
+        return os.path.splitext(os.path.basename(xyz_file))[0]
 
     def generate_input_configurations(self):
         input_configurations = []
@@ -41,12 +47,12 @@ class ConfigurationGenerator:
                         scf_mult = 1 if scftype in ('rhf', 'uhf-s') else 3
                         scf = scftype.split('-')[0]
                         if method == "hf" and self.include_hf:
-                            configuration = self.build_configuration(scf, scf_mult, method, basis, functional, None, f"h2o_{scftype}_{basis}_{functional}.inp")
+                            configuration = self.build_configuration(scf, scf_mult, method, basis, functional, None, f"{self.name_xyz}_{scftype}_{basis}_{functional}.inp")
                             input_configurations.append(configuration)
                         elif method == "tdhf":
                             for tddft in self.tddfttypes:
                                 if self.is_valid_tddft_scf_combination(scf, tddft):
-                                    file_name = f"h2o_{scftype}_{tddft}_{basis}_{functional}.inp"
+                                    file_name = f"{self.name_xyz}_{scftype}_{tddft}_{basis}_{functional}.inp"
                                     configuration = self.build_configuration(scf, scf_mult, method, basis, functional, tddft, file_name)
                                     input_configurations.append(configuration)
 
@@ -99,7 +105,7 @@ class ConfigurationGenerator:
                 "charge": 0,
                 "method": method,
                 "basis": basis,
-                "runtype": "grad",
+                "runtype": "energy",
                 "functional": functional,
                 "d4": False,
             },
@@ -109,11 +115,11 @@ class ConfigurationGenerator:
             },
             "scf": {
                 "type": scf,
-                "maxit": 30,
+                "maxit": 50,
                 "maxdiis": 5,
                 "multiplicity": scf_mult,
-                "conv": "1.0e-8",
-                "save_molden": False,
+                "conv": "1.0e-7",
+                "save_molden": True,
             },
             "dftgrid": {
                 "rad_npts": 96,
@@ -130,7 +136,7 @@ class ConfigurationGenerator:
                 "maxit": 15,
                 "multiplicity": tddft_mult,
                 "conv": "1.0e-10",
-                "nstate": 6,
+                "nstate": 12,
                 "zvconv": "1.0e-10"
             }
         return configuration
@@ -139,46 +145,77 @@ class ConfigurationGenerator:
         return f"ConfigurationGenerator with {len(self.methods)} methods, {len(self.basis_sets)} basis sets, {len(self.functionals)} functionals, {len(self.scftypes)} SCF types, and {len(self.tddfttypes)} TDDFT types."
 
 
+
+def main():
+    import os
+    import argparse
+    parser = argparse.ArgumentParser(description='Generate OpenQuantum input configurations.')
+    parser.add_argument('xyz_dir', type=str, help='Path to the directory containing XYZ files')
+    args = parser.parse_args()
+
+    xyz_dir = args.xyz_dir
+
+    if not os.path.isdir(xyz_dir):
+        print(f"Error: {xyz_dir} is not a valid directory.")
+        exit(1)
+
+    xyz_files = [file for file in os.listdir(xyz_dir) if file.endswith('.xyz')]
+
+    if not xyz_files:
+        print(f"Error: No XYZ files found in {xyz_dir}.")
+        exit(1)
+
+    for xyz_file in xyz_files:
+        with open(os.path.join(xyz_dir,xyz_file), 'r') as file:
+            lines = file.readlines()[2:]  # Skip the first two lines
+            if np.size(lines)>11:
+                file.close()
+                continue
+        file.close()
+        print(f"Processing {xyz_file}...")
+
+        generator = ConfigurationGenerator(
+            methods=["hf", "tdhf"],
+            basis_sets=["cc-pVTZ"],
+            functionals=["bhhlyp"],
+#           functionals=["dtcam-aee", "dtcam-vee", "dtcam-xi", "dtcam-xiv", "dtcam-vaee", "dtcam-tune"],
+#           scftypes=["rhf", "rohf", "uhf-s", "uhf-t"]
+            scftypes=["rhf","rohf", ],
+#           tddfttypes=["rpa-s", "rpa-t", "tda-s", "tda-t", "mrsf-s", "mrsf-t", "mrsf-q", "sf"],
+            tddfttypes=["mrsf-s", "rpa-s", "tda-s"],
+            xyz_file=os.path.join(xyz_dir, xyz_file),
+            include_hf=False
+        )
+
+        # Generate the configurations
+        configurations = generator.generate_input_configurations()
+
+        output_dir = 'input_files'
+        os.makedirs(output_dir, exist_ok=True)
+
+        for config in configurations:
+            file_path = os.path.join(output_dir, config['file_name'])
+            with open(file_path, 'w') as file:
+                for section, section_content in config.items():
+                    if section == 'file_name':
+                        continue
+                    file.write(f"[{section}]\n")
+                    if isinstance(section_content, dict):
+                        for key, value in section_content.items():
+                            file.write(f"{key}={value}\n")
+                    elif isinstance(section_content, str):
+                        file.write(f"{section_content}\n")
+                    file.write("\n")
+        # Print configurations
+        for config in configurations:
+            print(f"File Name: {config['file_name']}")
+            print(f"Method: {config['input']['method']}")
+            if 'tdhf' in config:
+                print("TDHF Section:")
+                for key, value in config['tdhf'].items():
+                    print(f"  {key}: {value}")
+            print("-" * 30)
+
+
 if __name__ == '__main__':
-    generator = ConfigurationGenerator(
-        methods=["hf", "tdhf"],
-        basis_sets=["6-31g"],
-#       functionals=["slater", "pbe", "bhhlyp", "b3lypv5", "m06-2x", "cam-b3lyp"],
-        functionals=["dtcam-aee", "dtcam-vee", "dtcam-xi", "dtcam-xiv", "dtcam-vaee", "dtcam-tune"],
-#       scftypes=["rhf", "rohf", "uhf-s", "uhf-t"]
-        scftypes=["rohf", ],
-#       tddfttypes=["rpa-s", "rpa-t", "tda-s", "tda-t", "mrsf-s", "mrsf-t", "mrsf-q", "sf"],
-        tddfttypes=["mrsf-s", "mrsf-q"],
-        xyz_file="h2o.xyz",
-        include_hf=False
-    )
-
-    # Generate the configurations
-    configurations = generator.generate_input_configurations()
-
-    output_dir = 'input_files'
-    os.makedirs(output_dir, exist_ok=True)
-
-    for config in configurations:
-        file_path = os.path.join(output_dir, config['file_name'])
-        with open(file_path, 'w') as file:
-            for section, section_content in config.items():
-                if section == 'file_name':
-                    continue
-                file.write(f"[{section}]\n")
-                if isinstance(section_content, dict):
-                    for key, value in section_content.items():
-                        file.write(f"{key}={value}\n")
-                elif isinstance(section_content, str):
-                    file.write(f"{section_content}\n")
-                file.write("\n")
-    # Print configurations
-    for config in configurations:
-        print(f"File Name: {config['file_name']}")
-        print(f"Method: {config['input']['method']}")
-        if 'tdhf' in config:
-            print("TDHF Section:")
-            for key, value in config['tdhf'].items():
-                print(f"  {key}: {value}")
-        print("-" * 30)
-
+    main()
