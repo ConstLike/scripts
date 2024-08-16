@@ -38,6 +38,7 @@ if __name__ == '__main__':
 #       file_inp = file_inp.replace('save_mol=False', 'save_mol=True')
 #       file_inp = file_inp.replace('maxit=15', 'maxit=30')
         file_inp = file_inp.replace('save_mol=True', 'save_mol=False')
+#       file_inp = file_inp.replace('functional=hf', 'functional=')
 #       file_inp = file_inp.replace('conv=1.0e-9', 'conv=1.0e-8')
 #       file_inp = file_inp.replace('dirscf=.f.','dirscf=.t.')
 #       file_inp = file_inp.replace('dfttyp=svwn','dfttyp=libxc')
