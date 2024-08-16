@@ -68,7 +68,8 @@ class MolcasInputGenerator:
         return input_content
 
     def generate_input_file(self):
-        output_dir = os.path.join(os.getcwd(), self.molecule_name)
+        self.general_name = f"{self.molecule_name}_e{self.active_electrons}_o{self.active_orbitals}"
+        output_dir = os.path.join(os.getcwd(), self.general_name)
         os.makedirs(output_dir, exist_ok=True)
 
         # Copy XYZ file to output directory
@@ -76,10 +77,10 @@ class MolcasInputGenerator:
             dst.write(src.read())
 
         input_content = self.generate_input()
-        filename = f"{self.molecule_name}_e{self.active_electrons}_o{self.active_orbitals}.input"
+        filename = f"{self.general_name}.input"
         with open(os.path.join(output_dir, filename), 'w') as f:
             f.write(input_content)
-        print(f"Generated: {filename}")
+        print(f"Generated: {os.path.join(output_dir,filename)}")
 
 
 def parse_args():
