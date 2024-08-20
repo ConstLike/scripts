@@ -5,7 +5,7 @@ import os
 import numpy as np
 
 
-class ConfigurationGenerator:
+class OpenQPInputGenerator:
     def __init__(self, methods, basis_sets, functionals, scftypes, tddfttypes, xyz_file, include_hf=True):
         self.methods = methods
         self.basis_sets = basis_sets
@@ -55,23 +55,6 @@ class ConfigurationGenerator:
                                     file_name = f"{self.name_xyz}_{scftype}_{tddft}_{basis}_{functional}.inp"
                                     configuration = self.build_configuration(scf, scf_mult, method, basis, functional, tddft, file_name)
                                     input_configurations.append(configuration)
-
-#                       tddft_options = []
-#                       if method == "tdhf":
-#                           if scf == 'rhf':
-#                               tddft_options = ["rpa-s", "rpa-t", "tda-s", "tda-t"]
-#                           elif scf == 'rohf':
-#                               tddft_options = ["mrsf-s", "mrsf-t", "mrsf-q", "sf"]
-
-#                       if not tddft_options and method == "tdhf":
-#                           continue
-
-#                       tddft_options = [None] if not tddft_options else tddft_options
-
-#                       for tddft in tddft_options:
-#                           file_name = f"h2o_{scftype}_{basis}_{functional}.inp" if tddft is None else f"h2o_{scftype}_{tddft}_{basis}_{functional}.inp"
-#                           configuration = self.build_configuration(scf, scf_mult, method, basis, functional, tddft, file_name)
-#                           input_configurations.append(configuration)
 
         return input_configurations
 
@@ -142,14 +125,14 @@ class ConfigurationGenerator:
         return configuration
 
     def __str__(self):
-        return f"ConfigurationGenerator with {len(self.methods)} methods, {len(self.basis_sets)} basis sets, {len(self.functionals)} functionals, {len(self.scftypes)} SCF types, and {len(self.tddfttypes)} TDDFT types."
+        return f"OpenQPInputGenerator with {len(self.methods)} methods, {len(self.basis_sets)} basis sets, {len(self.functionals)} functionals, {len(self.scftypes)} SCF types, and {len(self.tddfttypes)} TDDFT types."
 
 
 
 def main():
     import os
     import argparse
-    parser = argparse.ArgumentParser(description='Generate OpenQuantum input configurations.')
+    parser = argparse.ArgumentParser(description='Generate OpenQP input file.')
     parser.add_argument('xyz_dir', type=str, help='Path to the directory containing XYZ files')
     args = parser.parse_args()
 
@@ -168,32 +151,41 @@ def main():
     for xyz_file in xyz_files:
         with open(os.path.join(xyz_dir,xyz_file), 'r') as file:
             lines = file.readlines()[2:]  # Skip the first two lines
-            if np.size(lines)>11:
-                file.close()
-                continue
+#           if np.size(lines)>11:
+#               file.close()
+#               continue
         file.close()
         print(f"Processing {xyz_file}...")
+        methods=["tdhf"]
+#       methods=["hf", "tdhf"]
+        basis_sets=["cc-pVDZ"]
+        functionals=["ksdt"]
+#       functionals=["dtcam-aee", "dtcam-vee", "dtcam-xi", "dtcam-xiv", "dtcam-vaee", "dtcam-tune"]
+#       scftypes=["rhf", "rohf", "uhf-s", "uhf-t"]
+        scftypes=["rohf"]
+#       tddfttypes=["rpa-s", "rpa-t", "tda-s", "tda-t", "mrsf-s", "mrsf-t", "mrsf-q", "sf"]
+        tddfttypes=["mrsf-s"]
 
-        generator = ConfigurationGenerator(
-            methods=["hf", "tdhf"],
-            basis_sets=["cc-pVTZ"],
-            functionals=["bhhlyp"],
-#           functionals=["dtcam-aee", "dtcam-vee", "dtcam-xi", "dtcam-xiv", "dtcam-vaee", "dtcam-tune"],
-#           scftypes=["rhf", "rohf", "uhf-s", "uhf-t"]
-            scftypes=["rhf","rohf", ],
-#           tddfttypes=["rpa-s", "rpa-t", "tda-s", "tda-t", "mrsf-s", "mrsf-t", "mrsf-q", "sf"],
-            tddfttypes=["mrsf-s", "rpa-s", "tda-s"],
+        generator = OpenQPInputGenerator(
+            methods=methods,
+            basis_sets=basis_sets,
+            functionals=functionals,
+            scftypes=scftypes,
+            tddfttypes=tddfttypes,
             xyz_file=os.path.join(xyz_dir, xyz_file),
             include_hf=False
         )
 
-        # Generate the configurations
-        configurations = generator.generate_input_configurations()
+        # Generate the inputs
+        inputs = generator.generate_input_configurations()
 
-        output_dir = 'input_files'
+        if "tdhf" in methods:
+            output_dir = f"OQP_{scftypes[0]}_{tddfttypes[0]}_{basis_sets[0]}_{functionals[0]}"
+        else:
+            output_dir = f"OQP_{scftypes[0]}_{basis_sets[0]}_{functionals[0]}"
         os.makedirs(output_dir, exist_ok=True)
 
-        for config in configurations:
+        for config in inputs:
             file_path = os.path.join(output_dir, config['file_name'])
             with open(file_path, 'w') as file:
                 for section, section_content in config.items():
@@ -206,8 +198,8 @@ def main():
                     elif isinstance(section_content, str):
                         file.write(f"{section_content}\n")
                     file.write("\n")
-        # Print configurations
-        for config in configurations:
+        # Print inputs
+        for config in inputs:
             print(f"File Name: {config['file_name']}")
             print(f"Method: {config['input']['method']}")
             if 'tdhf' in config:
