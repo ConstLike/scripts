@@ -97,12 +97,20 @@ class MolcasInputGenerator:
             f.write(input_content)
         print(f"Generated: {os.path.join(output_dir,filename)}")
 
+def generate_active_spaces(min_electrons, max_electrons, min_orbitals, max_orbitals):
+    spaces = []
+    for electrons in range(min_electrons, max_electrons + 1, 1):
+        for orbitals in range(electrons, max_orbitals + 1):
+            spaces.append((electrons, orbitals))
+    return spaces
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Generate OpenMolcas input file for a specific active space")
     parser.add_argument("xyz_file", help="Path to the XYZ file")
     parser.add_argument("--basis", default="ANO-L-VDZP", help="Basis set to use (default: ANO-L-VDZP)")
-    parser.add_argument("--active_space", nargs=2, type=int, default=[2, 2],
+    parser.add_argument("--min_active_space", nargs=2, type=int, default=[4, 4],
+                        help="Number of active electrons and orbitals (e.g., --active_space 2 2)")
+    parser.add_argument("--max_active_space", nargs=2, type=int, default=[14, 14],
                         help="Number of active electrons and orbitals (e.g., --active_space 2 2)")
     return parser.parse_args()
 
@@ -114,9 +122,20 @@ def main():
         print(f"Error: XYZ file '{args.xyz_file}' not found.")
         sys.exit(1)
 
-    generator = MolcasInputGenerator(args.xyz_file, args.basis, args.active_space[0], args.active_space[1])
-    generator.read_xyz()
-    generator.generate_input_file()
+    active_spaces = generate_active_spaces(
+            args.min_active_space[0], args.max_active_space[0],
+            args.min_active_space[1], args.max_active_space[1]
+    )
+
+    for active_electrons, active_orbitals in active_spaces:
+        generator = MolcasInputGenerator(
+                args.xyz_file,
+                args.basis,
+                active_electrons,
+                active_orbitals
+        )
+        generator.read_xyz()
+        generator.generate_input_file()
 
 
 if __name__ == "__main__":
