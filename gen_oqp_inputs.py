@@ -149,6 +149,7 @@ def main():
         exit(1)
 
     for xyz_file in xyz_files:
+        project_name = os.path.splitext(os.path.basename(xyz_file))[0]
         with open(os.path.join(xyz_dir,xyz_file), 'r') as file:
             lines = file.readlines()[2:]  # Skip the first two lines
 #           if np.size(lines)>11:
@@ -180,9 +181,9 @@ def main():
         inputs = generator.generate_input_configurations()
 
         if "tdhf" in methods:
-            output_dir = f"OQP_{scftypes[0]}_{tddfttypes[0]}_{basis_sets[0]}_{functionals[0]}"
+            output_dir = f"OQP_{project_name}_{scftypes[0]}_{tddfttypes[0]}_{basis_sets[0]}_{functionals[0]}"
         else:
-            output_dir = f"OQP_{scftypes[0]}_{basis_sets[0]}_{functionals[0]}"
+            output_dir = f"OQP_{project_name}_{scftypes[0]}_{basis_sets[0]}_{functionals[0]}"
         os.makedirs(output_dir, exist_ok=True)
 
         for config in inputs:
