@@ -101,7 +101,7 @@ class OpenQPInputGenerator:
                 "maxit": 50,
                 "maxdiis": 5,
                 "multiplicity": scf_mult,
-                "conv": "1.0e-7",
+                "conv": "1.0e-6",
                 "save_molden": True,
             },
             "dftgrid": {
@@ -157,13 +157,13 @@ def main():
 #               continue
         file.close()
         print(f"Processing {xyz_file}...")
-        methods=["tdhf"]
+        methods=["hf"]
 #       methods=["hf", "tdhf"]
         basis_sets=["cc-pVDZ"]
         functionals=["ksdt"]
 #       functionals=["dtcam-aee", "dtcam-vee", "dtcam-xi", "dtcam-xiv", "dtcam-vaee", "dtcam-tune"]
 #       scftypes=["rhf", "rohf", "uhf-s", "uhf-t"]
-        scftypes=["rohf"]
+        scftypes=["rhf"]
 #       tddfttypes=["rpa-s", "rpa-t", "tda-s", "tda-t", "mrsf-s", "mrsf-t", "mrsf-q", "sf"]
         tddfttypes=["mrsf-s"]
 
@@ -174,16 +174,17 @@ def main():
             scftypes=scftypes,
             tddfttypes=tddfttypes,
             xyz_file=os.path.join(xyz_dir, xyz_file),
-            include_hf=False
+            include_hf=True
         )
 
         # Generate the inputs
         inputs = generator.generate_input_configurations()
 
-        if "tdhf" in methods:
-            output_dir = f"OQP_{project_name}_{scftypes[0]}_{tddfttypes[0]}_{basis_sets[0]}_{functionals[0]}"
-        else:
-            output_dir = f"OQP_{project_name}_{scftypes[0]}_{basis_sets[0]}_{functionals[0]}"
+#       if "tdhf" in methods:
+#           output_dir = f"OQP_{project_name}_{scftypes[0]}_{tddfttypes[0]}_{basis_sets[0]}_{functionals[0]}"
+#       else:
+#           output_dir = f"OQP_{project_name}_{scftypes[0]}_{basis_sets[0]}_{functionals[0]}"
+        output_dir = "OQP"
         os.makedirs(output_dir, exist_ok=True)
 
         for config in inputs:
