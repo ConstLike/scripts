@@ -68,16 +68,16 @@ class ReferenceData:
         ground_state_file = os.path.join(output_dir, f"{molecule_name}_ground_state_dipole.csv")
         with open(ground_state_file, 'w', newline='') as f:
             writer = csv.writer(f)
-            writer.writerow(['Dipole'])
+            writer.writerow(['Ground_State_Dipole'])
             writer.writerow([self.get_dipole_magnitude(1)])  # State 1 is ground state
 
         # Write excited states dipoles
         if self.dipoles.keys():
+            excited_state_file = os.path.join(output_dir, f"{molecule_name}_excited_state_dipole.csv")
             for state in range(2, max(self.dipoles.keys()) + 1):
-                excited_state_file = os.path.join(output_dir, f"{molecule_name}_excited_state_{state-1}_dipole.csv")
                 with open(excited_state_file, 'w', newline='') as f:
                     writer = csv.writer(f)
-                    writer.writerow(['Dipole'])
+                    writer.writerow(['Excited_State_Dipole'])
                     writer.writerow([self.get_dipole_magnitude(state)])
 
 def process_directory(directory: str):
