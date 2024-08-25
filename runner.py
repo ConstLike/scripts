@@ -8,56 +8,70 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime
 from typing import List, Dict, Any
 
-class MolcasRunner:
+class Runner:
     def __init__(self,
-                 base_dir: str,
-                 output_dir: str = 'molcas_runs_tmp',
+                 runner: str,
+                 input_path: str,
+                 output_dir: str,
                  total_cpus: int = None,
-                 omp_threads: int = None):
-        self.base_dir = os.path.abspath(base_dir)
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        self.output_dir = os.path.abspath(f"{output_dir}_{timestamp}")
+                 omp_threads: int = None,
+                 use_output_flag: bool = False):
+        self.input_path = os.path.abspath(input_path)
+        self.output_dir = os.path.abspath(output_dir)
         self.total_cpus = total_cpus if total_cpus is not None else os.cpu_count()
         self.omp_threads = omp_threads if omp_threads is not None else self.total_cpus
         self.max_workers = max(1, self.total_cpus // self.omp_threads)
         self.results: List[Dict[str, Any]] = []
         self.start_time = None
         self.end_time = None
+        self.runner = runner
+        self.use_output_flag = use_output_flag
+        self.is_single_file = os.path.isfile(self.input_path)
 
         os.environ['OMP_NUM_THREADS'] = str(self.omp_threads)
 
     def log(self, message: str):
         """Simple logging function to stdout."""
-        print(f"[MolcasRunner] {message}")
+        print(f"[Runner] {message}")
 
-    def run_single_calculation(self, calc_dir: str) -> Dict[str, Any]:
-        input_file = f"{os.path.basename(calc_dir)}.input"
-        log_file = f"{os.path.basename(calc_dir)}.log"
-        input_path = os.path.join(calc_dir, input_file)
+    def run_single_calculation(self, input_file: str) -> Dict[str, Any]:
+        base_name = os.path.splitext(os.path.basename(input_file))[0]
+        log_file = f"{base_name}.log"
+
+        if self.is_single_file:
+            output_dir = self.output_dir
+        else:
+            input_dir = os.path.dirname(input_file)
+            output_subdir = os.path.relpath(input_dir, self.input_path)
+            output_dir = os.path.join(self.output_dir, output_subdir)
+
+        os.makedirs(output_dir, exist_ok=True)
 
         result = {
-            "calc_dir": calc_dir,
             "input_file": input_file,
-            "log_file": log_file,
+            "log_file": os.path.join(output_dir, log_file),
             "status": "UNKNOWN",
             "message": "",
             "execution_time": 0
         }
 
-        if not os.path.exists(input_path):
+        if not os.path.exists(input_file):
             result["status"] = "ERROR"
             result["message"] = f"Input file {input_file} not found"
             return result
 
-        self.log(f"Running calculation in {calc_dir}")
+        self.log(f"Running calculation for {input_file}")
         start_time = time.perf_counter()
 
         try:
+            command = f"{self.runner} {os.path.basename(input_file)}"
+            if self.use_output_flag:
+                command = f"{self.runner} {os.path.basename(input_file)} -o {log_file}"
             completed_process = subprocess.run(
-                f"pymolcas {input_file} -o {log_file}",
+                command,
                 shell=True,
                 check=True,
-                cwd=calc_dir,
+                cwd=output_dir,
                 capture_output=True,
                 text=True
             )
@@ -70,21 +84,37 @@ class MolcasRunner:
         result["execution_time"] = time.perf_counter() - start_time
         return result
 
+    def find_input_files(self, directory: str) -> List[str]:
+        input_files = []
+        for root, dirs, files in os.walk(directory):
+            for file in files:
+                if file.endswith('.inp'):
+                    input_files.append(os.path.join(root, file))
+        return input_files
+
     def run_calculations(self):
         self.start_time = time.perf_counter()
 
-        calc_dirs = [
-            os.path.join(self.base_dir, d) for d in os.listdir(self.base_dir)
-            if os.path.isdir(os.path.join(self.base_dir, d)) and '_' in d and '-' in d.split('_')[-1]
-        ]
-        calc_dirs.sort()
+        if os.path.isfile(self.input_path):
+            if not self.input_path.endswith('.inp'):
+                self.log(f"Error: The specified file {self.input_path} is not an .inp file.")
+                return
+            input_files = [self.input_path]
+        else:
+            input_files = self.find_input_files(self.input_path)
+
+        input_files.sort()
+
+        if not input_files:
+            self.log("No .inp files found in the specified directory or its subdirectories.")
+            return
 
         with ProcessPoolExecutor(max_workers=self.max_workers) as executor:
-            future_to_dir = {executor.submit(self.run_single_calculation, calc_dir): calc_dir for calc_dir in calc_dirs}
-            for future in as_completed(future_to_dir):
+            future_to_file = {executor.submit(self.run_single_calculation, input_file): input_file for input_file in input_files}
+            for future in as_completed(future_to_file):
                 self.results.append(future.result())
 
-        self.results.sort(key=lambda x: x['calc_dir'])
+        self.results.sort(key=lambda x: x['input_file'])
         self.end_time = time.perf_counter()
 
     def format_time(self, seconds: float) -> str:
@@ -100,12 +130,15 @@ class MolcasRunner:
         execution_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         summary = f"""
-Molcas Calculations Report
+Runner Calculations Report
 --------------------------
 Execution Date: {execution_date}
 Total calculations: {len(self.results)}
 Completed: {completed}
 Errors: {errors}
+
+Input files directory: {self.input_path}
+Output files directory: {self.output_dir}
 
 Total CPUs: {self.total_cpus}
 OMP threads per calculation: {self.omp_threads}
@@ -116,7 +149,7 @@ Total execution time: {self.format_time(total_time)}
 """
         detailed_results = "\nDetailed Results:\n"
         for result in self.results:
-            detailed_results += f"\nCalculation: {result['calc_dir']}\n"
+            detailed_results += f"\nCalculation: {result['input_file']}\n"
             detailed_results += f"Status: {result['status']}\n"
             detailed_results += f"Execution time: {self.format_time(result['execution_time'])}\n"
             detailed_results += f"Message: {result['message']}\n"
@@ -124,21 +157,38 @@ Total execution time: {self.format_time(total_time)}
         return summary
 
     def run(self) -> str:
-        self.log(f"Starting Molcas calculations in: {self.base_dir}")
+        self.log(f"Starting Runner calculations in: {self.input_path}")
         self.run_calculations()
         report = self.generate_report()
-        self.log("Molcas calculations completed")
+        self.log("Runner calculations completed")
         return report
 
 def main():
-    parser = argparse.ArgumentParser(description="Run Molcas calculations in parallel")
-    parser.add_argument("base_dir", help="Base directory containing the calculation folders")
+    parser = argparse.ArgumentParser(description="Run calculations in parallel")
+    parser.add_argument("runner", help="Runner program")
+    parser.add_argument("input_path", help="Path to input file or directory containing input files")
+    parser.add_argument("--output_dir", help="Output directory containing the calculation results")
     parser.add_argument("--total_cpus", type=int, default=None, help="Total number of CPUs to use")
     parser.add_argument("--omp_threads", type=int, default=None, help="Number of OMP threads per calculation")
 
     args = parser.parse_args()
 
-    runner = MolcasRunner(args.base_dir, total_cpus=args.total_cpus, omp_threads=args.omp_threads)
+    if args.output_dir is None:
+        if os.path.isfile(args.input_path):
+            output_dir = os.path.dirname(args.input_path)
+        else:
+            output_dir = args.input_path
+    else:
+        output_dir = args.output_dir
+
+    runner = Runner(
+            runner=args.runner,
+            input_path=args.input_path,
+            output_dir=output_dir,
+            total_cpus=args.total_cpus,
+            omp_threads=args.omp_threads,
+            use_output_flag=False
+    )
     report = runner.run()
     print(report)
 
