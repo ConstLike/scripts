@@ -36,6 +36,8 @@ class OpenQPInputGenerator:
             'Rf': 104, 'Db': 105, 'Sg': 106, 'Bh': 107, 'Hs': 108, 'Mt': 109, 'Ds': 110, 'Rg': 111, 'Cn': 112,
             'Nh': 113, 'Fl': 114, 'Mc': 115, 'Lv': 116, 'Ts': 117, 'Og': 118
         }
+        number_to_symbol = {v: k for k, v in atom_numbers.items()}
+
         geometry = []
 
         with open(xyz_file, 'r') as file:
@@ -44,7 +46,12 @@ class OpenQPInputGenerator:
                 parts = line.split()
                 if len(parts) == 4:
                     atom, x, y, z = parts
-                    geometry.append(f" {atom} {float(x):14.9f} {float(y):14.9f} {float(z):14.9f}")
+                    if atom.isdigit():
+                        atom_number = int(atom)
+                        atom_symbol = number_to_symbol.get(atom_number, str(atom_number))
+                    else:
+                        atom_symbol = atom.capitalize()
+                    geometry.append(f" {atom_symbol} {float(x):14.9f} {float(y):14.9f} {float(z):14.9f}")
 
         return "\n".join(geometry)
 
@@ -103,7 +110,7 @@ class OpenQPInputGenerator:
                 "charge": 0,
                 "method": method,
                 "basis": basis,
-                "runtype": "energy",
+                "runtype": "grad",
                 "functional": functional,
                 "d4": False,
             },
@@ -116,7 +123,7 @@ class OpenQPInputGenerator:
                 "maxit": 50,
                 "maxdiis": 5,
                 "multiplicity": scf_mult,
-                "conv": "1.0e-6",
+                "conv": "1.0e-5",
                 "save_molden": True,
             },
             "dftgrid": {
@@ -131,11 +138,11 @@ class OpenQPInputGenerator:
         if tddft:
             configuration["tdhf"] = {
                 "type": tddft.split('-')[0],
-                "maxit": 15,
+                "maxit": 30,
                 "multiplicity": tddft_mult,
-                "conv": "1.0e-10",
-                "nstate": 12,
-                "zvconv": "1.0e-10"
+                "conv": "1.0e-6",
+                "nstate": 10,
+                "zvconv": "1.0e-6",
             }
         return configuration
 
@@ -172,13 +179,13 @@ def main():
 #               continue
         file.close()
         print(f"Processing {xyz_file}...")
-        methods=["hf"]
+        methods=["hf","tdhf"]
 #       methods=["hf", "tdhf"]
-        basis_sets=["cc-pVDZ"]
-        functionals=["",]
+        basis_sets=["6-31g","cc-pVDZ"]
+        functionals=["","pbe",]
 #       functionals=["dtcam-aee", "dtcam-vee", "dtcam-xi", "dtcam-xiv", "dtcam-vaee", "dtcam-tune"]
 #       scftypes=["rhf", "rohf", "uhf-s", "uhf-t"]
-        scftypes=["rhf"]
+        scftypes=["rhf","rohf"]
 #       tddfttypes=["rpa-s", "rpa-t", "tda-s", "tda-t", "mrsf-s", "mrsf-t", "mrsf-q", "sf"]
         tddfttypes=["mrsf-s"]
 
