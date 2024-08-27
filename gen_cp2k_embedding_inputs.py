@@ -25,14 +25,50 @@ class CP2KInputGenerator:
 
     def _get_fragment_info(self) -> Dict[str, Dict[str, int]]:
         info = {}
+        atom_numbers= {
+            'H': 1, 'He': 2, 'Li': 3, 'Be': 4, 'B': 5, 'C': 6, 'N': 7, 'O': 8, 'F': 9, 'Ne': 10,
+            'Na': 11, 'Mg': 12, 'Al': 13, 'Si': 14, 'P': 15, 'S': 16, 'Cl': 17, 'Ar': 18,
+            'K': 19, 'Ca': 20, 'Sc': 21, 'Ti': 22, 'V': 23, 'Cr': 24, 'Mn': 25, 'Fe': 26, 'Co': 27, 'Ni': 28,
+            'Cu': 29, 'Zn': 30, 'Ga': 31, 'Ge': 32, 'As': 33, 'Se': 34, 'Br': 35, 'Kr': 36,
+            'Rb': 37, 'Sr': 38, 'Y': 39, 'Zr': 40, 'Nb': 41, 'Mo': 42, 'Tc': 43, 'Ru': 44, 'Rh': 45, 'Pd': 46,
+            'Ag': 47, 'Cd': 48, 'In': 49, 'Sn': 50, 'Sb': 51, 'Te': 52, 'I': 53, 'Xe': 54,
+            'Cs': 55, 'Ba': 56, 'La': 57, 'Ce': 58, 'Pr': 59, 'Nd': 60, 'Pm': 61, 'Sm': 62, 'Eu': 63, 'Gd': 64,
+            'Tb': 65, 'Dy': 66, 'Ho': 67, 'Er': 68, 'Tm': 69, 'Yb': 70, 'Lu': 71,
+            'Hf': 72, 'Ta': 73, 'W': 74, 'Re': 75, 'Os': 76, 'Ir': 77, 'Pt': 78, 'Au': 79, 'Hg': 80,
+            'Tl': 81, 'Pb': 82, 'Bi': 83, 'Po': 84, 'At': 85, 'Rn': 86,
+            'Fr': 87, 'Ra': 88, 'Ac': 89, 'Th': 90, 'Pa': 91, 'U': 92, 'Np': 93, 'Pu': 94, 'Am': 95, 'Cm': 96,
+            'Bk': 97, 'Cf': 98, 'Es': 99, 'Fm': 100, 'Md': 101, 'No': 102, 'Lr': 103,
+            'Rf': 104, 'Db': 105, 'Sg': 106, 'Bh': 107, 'Hs': 108, 'Mt': 109, 'Ds': 110, 'Rg': 111, 'Cn': 112,
+            'Nh': 113, 'Fl': 114, 'Mc': 115, 'Lv': 116, 'Ts': 117, 'Og': 118
+        }
+        def count_electrons(xyz_file):
+            total_electrons = 0
+            with open(xyz_file, 'r') as file:
+                lines = file.readlines()[2:]  # Skip the first two lines
+                for line in lines:
+                    parts = line.split()
+                    if len(parts) == 4:
+                        atom = parts[0]
+                        total_electrons += atom_numbers.get(atom, 0)
+            return total_electrons
+
         for filename in ['tot.xyz'] + self.fragments:
-            with open(os.path.join(self.xyz_dir, filename), 'r') as f:
+            file = os.path.join(self.xyz_dir, filename)
+            with open(file, 'r') as f:
                 num_atoms = int(f.readline().strip())
                 second_line = f.readline().strip().lower()
                 method = 'dft'  # Default method
                 if 'method=' in second_line:
                     method = second_line.split('method=')[1].split()[0]
-            info[filename] = {'atoms': num_atoms, 'method': method}
+
+            num_electrons = count_electrons(file)
+
+            info[filename] = {
+                    'atoms': num_atoms,
+                    'method': method,
+                    'electrons': num_electrons,
+            }
+
         return info
 
     def generate_input(self) -> str:
@@ -217,14 +253,34 @@ class OpenMOLCASInputGenerator:
         self.cell_size = config['cell']
         self.fragment_info = config['info fragments']
         self.wf_fragments = [frag for frag, info in self.fragment_info.items() if info['method'] == 'wf']
+        self.min_active_space = [2, 6]
+        self.max_active_space = [14, 14]
 
     def _angstrom_to_au(self, value: float) -> float:
 #       return value * 1.8897259886
         return value * 1.8722325
 
+    def generate_active_space(self, num_electrons):
+
+        min_electrons, max_electrons = self.min_active_space[0], self.max_active_space[0]
+        min_orbitals, max_orbitals = self.min_active_space[1], self.max_active_space[1]
+
+        active_electrons = min(max(num_electrons, min_electrons), max_electrons)
+        active_orbitals = min(max(num_electrons, min_orbitals), max_orbitals)
+
+        space = [active_electrons, active_orbitals]
+
+        return space
+
     def generate_input(self, fragment_number: str) -> str:
         cell_au = [self._angstrom_to_au(size) for size in self.cell_size]
         grid_origin = [-size/2 for size in cell_au]
+
+        n_electrons = self.fragment_info[f'frag{fragment_number}.xyz']['electrons']
+        active_space = self.generate_active_space(n_electrons)
+        active_electrons = active_space[0]
+        active_orbitals = active_space[1]
+        inactive = (n_electrons - active_electrons) // 2
 
         input_content = f"""> copy $CurrDir/vemb_{fragment_number}.dat $WorkDir
 > copy $CurrDir/{self.xyz_dir}/frag{fragment_number}.xyz $WorkDir
@@ -244,10 +300,10 @@ class OpenMOLCASInputGenerator:
 &rasscf
    Spin=1
    Symmetry=1
-   nActEl=2 0 0
-   Inactive=0
+   nActEl={active_electrons} 0 0
+   Inactive={inactive}
    RAS1=0
-   RAS2=6
+   RAS2={active_orbitals}
    RAS3=0
    CIRoot=1 1 1
 
