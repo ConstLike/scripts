@@ -111,14 +111,22 @@ class CP2KInputGenerator:
         return input_content
 
     def _generate_force_eval_section(self, index: int) -> str:
+
+
         if index == 0:
             section = """# Total
 """
             filename = 'tot.xyz'
         else:
-            section = f"""# Fragment {index}
-"""
             filename = self.fragments[index-1]
+            method = self.fragment_info[filename]['method'].lower()
+            if method == "wf":
+                section = f"""# Fragment {index}, WF
+"""
+            else:
+                section = f"""# Fragment {index}, DFT
+"""
+        method = self.fragment_info[filename]['method'].lower()
 
         section += """&force_eval
   &dft
@@ -126,7 +134,6 @@ class CP2KInputGenerator:
     potential_file_name GTH_POTENTIALS
 """
 
-        method = self.fragment_info[filename]['method'].lower()
         if method == "wf":
             section +="""    &qs
       fat_extern t
@@ -136,7 +143,7 @@ class CP2KInputGenerator:
             section += f"""    &qs
       ref_embed_subsys t
       &opt_embed
-        n_iter 20
+        n_iter 50
         dens_conv_max 1e-8
         &xc
           &xc_functional
@@ -181,7 +188,7 @@ class CP2KInputGenerator:
         if index == 0:
             section += """  &print
     &forces
-      filename tot
+      filename "force_tot"
     &end
   &end
 """
@@ -212,7 +219,8 @@ class OpenMOLCASInputGenerator:
         self.wf_fragments = [frag for frag, info in self.fragment_info.items() if info['method'] == 'wf']
 
     def _angstrom_to_au(self, value: float) -> float:
-        return value * 1.8897259886
+#       return value * 1.8897259886
+        return value * 1.8722325
 
     def generate_input(self, fragment_number: str) -> str:
         cell_au = [self._angstrom_to_au(size) for size in self.cell_size]
@@ -233,8 +241,18 @@ class OpenMOLCASInputGenerator:
 
 &scf
 
+&rasscf
+   Spin=1
+   Symmetry=1
+   nActEl=2 0 0
+   Inactive=0
+   RAS1=0
+   RAS2=6
+   RAS3=0
+   CIRoot=1 1 1
+
 &grid_it
-  name=Scf
+  name=rasscf
   npoints=107 107 107
   gori
   {grid_origin[0]:.7f} {grid_origin[1]:.7f} {grid_origin[2]:.7f}
@@ -242,15 +260,17 @@ class OpenMOLCASInputGenerator:
   0.0 {cell_au[1]:.7f} 0.0
   0.0 0.0 {cell_au[2]:.7f}
 
+&alaska
 """
         return input_content
 
     def generate_run_script(self, fragment_number: str) -> str:
-        script_content = f"""#!/bin/bash
+        script_content = f"""#!/bin/sh
 pymolcas extern_{fragment_number}.inp | tee extern_{fragment_number}.out
-grep "Total SCF energy" extern_{fragment_number}.out | awk '{{ print $5 }}' > extern_{fragment_number}.e
-python2 $MOLCAS/Tools/grid2cube/grid2cube.py extern_{fragment_number}.Scf.lus extern_{fragment_number}_orig.cube
+grep "1 Total energy" extern_{fragment_number}.out | awk '{{ print $8 }}' > extern_{fragment_number}.e
+python2 $MOLCAS/Tools/grid2cube/grid2cube.py extern_{fragment_number}.rasscf.lus extern_{fragment_number}_orig.cube
 python3 roll_cubefile.py extern_{fragment_number}_orig.cube extern_{fragment_number}.cube
+
 """
         return script_content
 
@@ -319,7 +339,7 @@ def main():
     if any(info['method'] == 'wf' for info in config['info fragments'].values()):
         pass
         config['molcas'] = {}
-        config['molcas']['basis set']  = 'ANO-S-VDZP'
+        config['molcas']['basis set']  = 'ANO-S'
 
         gen_molcas = OpenMOLCASInputGenerator(config)
         gen_molcas.save_input(args.output)
