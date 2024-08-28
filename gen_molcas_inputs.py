@@ -47,8 +47,12 @@ class MolcasInputGenerator:
         return element_dict.get(element, 0)
 
     def generate_input(self):
+        if self.active_electrons > self.num_electrons:
+            return ""
+
         inactive = (self.num_electrons - self.active_electrons) // 2
         n_roots = min(7, self.active_electrons * self.active_orbitals)  # Adjust number of roots based on active space
+
 
         input_content = f"""
 &GATEWAY
@@ -92,22 +96,22 @@ class MolcasInputGenerator:
             dst.write(src.read())
 
         input_content = self.generate_input()
-        filename = f"{self.general_name}.input"
+        filename = f"{self.general_name}.inp"
         with open(os.path.join(output_dir, filename), 'w') as f:
             f.write(input_content)
-        print(f"Generated: {os.path.join(output_dir,filename)}")
 
 def generate_active_spaces(min_electrons, max_electrons, min_orbitals, max_orbitals):
     spaces = []
     for electrons in range(min_electrons, max_electrons + 1, 1):
-        for orbitals in range(electrons, max_orbitals + 1):
-            spaces.append((electrons, orbitals))
+        spaces.append((electrons, electrons))
+#       for orbitals in range(electrons, max_orbitals + 1):
+#           spaces.append((electrons, orbitals))
     return spaces
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Generate OpenMolcas input file for a specific active space")
     parser.add_argument("xyz_file", help="Path to the XYZ file")
-    parser.add_argument("--basis", default="ANO-L-VDZP", help="Basis set to use (default: ANO-L-VDZP)")
+    parser.add_argument("--basis", default="ANO-S", help="Basis set to use (default: ANO-L-VDZP)")
     parser.add_argument("--min_active_space", nargs=2, type=int, default=[4, 4],
                         help="Number of active electrons and orbitals (e.g., --active_space 2 2)")
     parser.add_argument("--max_active_space", nargs=2, type=int, default=[14, 14],
