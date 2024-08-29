@@ -48,7 +48,8 @@ class Runner:
             "log_file": os.path.join(output_dir, log_file),
             "status": "UNKNOWN",
             "message": "",
-            "execution_time": 0
+            "execution_time": 0,
+            "restarts": 0
         }
 
         if not os.path.exists(input_file):
@@ -96,11 +97,13 @@ class Runner:
                 result["message"] = f"Error: {str(e)}\nOutput: {e.output}"
                 result["restarts"] += 1
 
-                if "Segmentation fault" in str(e) and attempt < self.max_restarts:
-                    self.log(f"Segmentation fault detected. Restarting calculation (Attempt {attempt + 2}/{self.max_restarts + 1})")
-                    continue
-                else:
-                    break
+                if e.returncode == 139 or "Segmentation fault" in str(e):
+                    if attempt < self.max_restarts:
+                        self.log(f"Segmentation fault detected. Restarting calculation (Attempt {attempt + 2}/{self.max_restarts + 1})")
+                        continue
+                    else:
+                        result["message"] += "\nMax restarts reached after segmentation faults."
+                break
 
         result["execution_time"] = time.perf_counter() - start_time
         return result
@@ -174,6 +177,7 @@ Total execution time: {self.format_time(total_time)}
             detailed_results += f"\nCalculation: {result['input_file']}\n"
             detailed_results += f"Status: {result['status']}\n"
             detailed_results += f"Execution time: {self.format_time(result['execution_time'])}\n"
+            detailed_results += f"Restarts: {result['restarts']}\n"
             detailed_results += f"Message: {result['message']}\n"
 
         return summary + detailed_results
