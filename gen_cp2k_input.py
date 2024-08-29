@@ -17,7 +17,7 @@ class CP2KInputGenerator:
     def generate_input(self, molecule_name: str, xyz_filename: str) -> str:
         input_content = f"""&GLOBAL
   PROJECT {molecule_name}
-  RUN_TYPE ENERGY
+  RUN_TYPE ENERGY_FORCE
   PRINT_LEVEL MEDIUM
 &END GLOBAL
 
@@ -58,6 +58,15 @@ class CP2KInputGenerator:
       &XC_FUNCTIONAL {self.dft_functional}
       &END XC_FUNCTIONAL
     &END XC
+    &PRINT
+      &E_DENSITY_CUBE
+        STRIDE 1 1 1
+      &END E_DENSITY_CUBE
+      &MO_MOLDEN
+        GTO_KIND CARTESIAN
+        NDIGITS 6
+      &END MO_MOLDEN
+    &END PRINT
   &END DFT
   &SUBSYS
     &CELL
@@ -72,6 +81,15 @@ class CP2KInputGenerator:
       POTENTIAL {self.pseudopotential}
     &END KIND
   &END SUBSYS
+  &PRINT
+    &FORCES
+      FILENAME FORCE
+      NDIGITS 10
+    &END FORCES
+    &GRID_INFORMATION
+      FILENAME GRID_INFO
+    &END GRID_INFORMATION
+  &END PRINT
 &END FORCE_EVAL
 """
         return input_content
