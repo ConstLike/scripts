@@ -66,7 +66,8 @@ class Runner:
         try:
             command = f"{self.runner} {os.path.basename(input_file)}"
             if self.use_output_flag:
-                command = f"{self.runner} {os.path.basename(input_file)} -o {log_file}"
+                command = f"{command} > {log_file}"
+
             completed_process = subprocess.run(
                 command,
                 shell=True,
@@ -167,6 +168,7 @@ def main():
     parser = argparse.ArgumentParser(description="Run calculations in parallel")
     parser.add_argument("runner", help="Runner program")
     parser.add_argument("input_path", help="Path to input file or directory containing input files")
+    parser.add_argument("--log", type=bool, default=False, help="Write log file")
     parser.add_argument("--output_dir", help="Output directory containing the calculation results")
     parser.add_argument("--total_cpus", type=int, default=None, help="Total number of CPUs to use")
     parser.add_argument("--omp_threads", type=int, default=None, help="Number of OMP threads per calculation")
@@ -187,7 +189,7 @@ def main():
             output_dir=output_dir,
             total_cpus=args.total_cpus,
             omp_threads=args.omp_threads,
-            use_output_flag=False
+            use_output_flag=args.log
     )
     report = runner.run()
     print(report)
