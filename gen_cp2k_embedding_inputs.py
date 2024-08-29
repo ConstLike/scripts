@@ -168,15 +168,22 @@ class CP2KInputGenerator:
   &dft
     basis_set_file_name GTH_BASIS_SETS
     potential_file_name GTH_POTENTIALS
+    &mgrid
+      ngrids 4
+      cutoff 210
+      rel_cutoff 40
+    &end mgrid
 """
 
         if method == "wf":
             section +="""    &qs
       fat_extern t
-    &end
+    &end qs
 """
         if index == 0:
             section += f"""    &qs
+      method gpw
+      eps_default 1.0e-8
       ref_embed_subsys t
       &opt_embed
         n_iter 50
@@ -184,49 +191,55 @@ class CP2KInputGenerator:
         &xc
           &xc_functional
             &{self.kinetic_functional}
-            &end
-          &end
-        &end
-      &end
-    &end
+            &end {self.kinetic_functional}
+          &end xc_functional
+        &end xc
+      &end opt_embed
+    &end qs
 """
         section += f"""    &scf
+      scf_guess atomic
       eps_scf 1e-8
-    &end
+      max_scf 50
+      cholesky inverse
+      &diagonalization
+        algorithm standard
+      &end diagonalization
+    &end scf
     &xc
       &xc_functional {self.dft_functional}
-      &end
-    &end
+      &end xc_functional
+    &end xc
 """
         if index != 0:
             section += f"""    &print
       &e_density_cube
         filename frag{index}
         stride 1 1 1
-      &end
-    &end
+      &end e_density_cube
+    &end print
 """
-        section +=f"""  &end
+        section +=f"""  &end dft
   &subsys
     &cell
       abc {self.cell_size[0]:.2f} {self.cell_size[1]:.2f} {self.cell_size[2]:.2f}
-    &end
+    &end cell
     &kind default
       basis_set {self.basis_set}
       potential {self.pseudopotential}
-    &end
+    &end kind
     &topology
       coord_file_format xyz
       coord_file_name {self.xyz_dir}/{filename}
-    &end
-  &end
+    &end topology
+  &end subsys
 """
         if index == 0:
             section += """  &print
     &forces
       filename "force_tot"
-    &end
-  &end
+    &end forces
+  &end print
 """
         section += """&end
 

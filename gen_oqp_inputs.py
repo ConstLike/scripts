@@ -120,10 +120,10 @@ class OpenQPInputGenerator:
             },
             "scf": {
                 "type": scf,
-                "maxit": 50,
+                "maxit": 100,
                 "maxdiis": 5,
                 "multiplicity": scf_mult,
-                "conv": "1.0e-5",
+                "conv": "1.0e-7",
                 "save_molden": True,
             },
             "dftgrid": {
@@ -140,9 +140,9 @@ class OpenQPInputGenerator:
                 "type": tddft.split('-')[0],
                 "maxit": 30,
                 "multiplicity": tddft_mult,
-                "conv": "1.0e-6",
+                "conv": "1.0e-10",
                 "nstate": 10,
-                "zvconv": "1.0e-6",
+                "zvconv": "1.0e-10",
             }
         return configuration
 
@@ -179,13 +179,13 @@ def main():
 #               continue
         file.close()
         print(f"Processing {xyz_file}...")
-        methods=["hf","tdhf"]
+        methods=["tdhf",]
 #       methods=["hf", "tdhf"]
-        basis_sets=["6-31g","cc-pVDZ"]
-        functionals=["","pbe",]
+        basis_sets=["cc-pVDZ"]
+        functionals=["slater","bhhlyp","dtcam-aee"]
 #       functionals=["dtcam-aee", "dtcam-vee", "dtcam-xi", "dtcam-xiv", "dtcam-vaee", "dtcam-tune"]
 #       scftypes=["rhf", "rohf", "uhf-s", "uhf-t"]
-        scftypes=["rhf","rohf"]
+        scftypes=["rohf"]
 #       tddfttypes=["rpa-s", "rpa-t", "tda-s", "tda-t", "mrsf-s", "mrsf-t", "mrsf-q", "sf"]
         tddfttypes=["mrsf-s"]
 
@@ -196,7 +196,7 @@ def main():
             scftypes=scftypes,
             tddfttypes=tddfttypes,
             xyz_file=os.path.join(xyz_dir, xyz_file),
-            include_hf=True
+            include_hf=False
         )
 
         # Generate the inputs
@@ -206,7 +206,7 @@ def main():
 #           output_dir = f"OQP_{project_name}_{scftypes[0]}_{tddfttypes[0]}_{basis_sets[0]}_{functionals[0]}"
 #       else:
 #           output_dir = f"OQP_{project_name}_{scftypes[0]}_{basis_sets[0]}_{functionals[0]}"
-        output_dir = "OQP"
+        output_dir = xyz_dir
         os.makedirs(output_dir, exist_ok=True)
 
         for config in inputs:
