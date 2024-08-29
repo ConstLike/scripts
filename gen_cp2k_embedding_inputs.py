@@ -57,7 +57,7 @@ class CP2KInputGenerator:
             with open(file, 'r') as f:
                 num_atoms = int(f.readline().strip())
                 second_line = f.readline().strip().lower()
-                method = 'dft'  # Default method
+                method = 'dft'  # Default method dft-in-dft
                 if 'method=' in second_line:
                     method = second_line.split('method=')[1].split()[0]
 
@@ -133,22 +133,19 @@ class CP2KInputGenerator:
     &end
     &topology
       coord_file_format xyz
-      coord_file_name {self.xyz_dir}/tot.xyz
+      coord_file_name {self.molecule_name}_xyz/tot.xyz
     &end
   &end
 &end
 
 """
 
-        # Add force_eval sections for total system and fragments
         for i in range(len(self.fragments) + 1):
             input_content += self._generate_force_eval_section(i)
 
         return input_content
 
     def _generate_force_eval_section(self, index: int) -> str:
-
-
         if index == 0:
             section = """# Total
 """
@@ -230,7 +227,7 @@ class CP2KInputGenerator:
     &end kind
     &topology
       coord_file_format xyz
-      coord_file_name {self.xyz_dir}/{filename}
+      coord_file_name {self.molecule_name}_xyz/{filename}
     &end topology
   &end subsys
 """
@@ -247,10 +244,9 @@ class CP2KInputGenerator:
         return section
 
     def save_input(self, output_dir: str):
-        dir_name = ""
         method = 'wf' if any(info['method'].lower() == 'wf' for info in self.fragment_info.values()) else 'dft'
         file_name = f"{method}-in-dft_{self.molecule_name}_{self.basis_set.lower()}_{self.dft_functional.lower()}_{self.pseudopotential.lower()}"
-        output_path = os.path.join(output_dir, dir_name)
+        output_path = output_dir
         os.makedirs(output_path, exist_ok=True)
         filename = f"{file_name}.inp"
         with open(os.path.join(output_path, filename), 'w') as f:
@@ -296,7 +292,7 @@ class OpenMOLCASInputGenerator:
         inactive = (n_electrons - active_electrons) // 2
 
         input_content = f"""> copy $CurrDir/vemb_{fragment_number}.dat $WorkDir
-> copy $CurrDir/{self.xyz_dir}/frag{fragment_number}.xyz $WorkDir
+> copy $CurrDir/{self.molecule_name}_xyz/frag{fragment_number}.xyz $WorkDir
 &gateway
   title=extern_{fragment_number}
   coord=frag{fragment_number}.xyz
@@ -373,45 +369,55 @@ with open(argv[2], "w") as f:
                 f.write(self.generate_run_script(fragment_number))
             print(f"Generated: {os.path.join(output_dir, script_filename)}")
 
-            # Generate and save run script
+            # Generate and save roll cubefile script
             roll_cubefile_filename = "roll_cubefile.py"
             with open(os.path.join(output_dir, roll_cubefile_filename), 'w') as f:
                 f.write(self.generate_roll_cubefile_script())
             print(f"Generated: {os.path.join(output_dir, roll_cubefile_filename)}")
 
-#           # Make the script executable
-#           os.chmod(os.path.join(output_dir, script_filename), 0o755)
+def process_directory(directory: str, cell_size: List[float]):
+    xyz_dir = os.path.join(directory, f"{os.path.basename(directory)}_xyz")
+    if not os.path.exists(xyz_dir) or not os.path.exists(os.path.join(xyz_dir, 'tot.xyz')):
+        print(f"Skipping {directory}: no valid xyz directory found")
+        return
+
+    config = {
+        'xyz dir': xyz_dir,
+        'molecule': os.path.basename(directory),
+        'cell': cell_size,
+        'cp2k': {
+            'basis set': 'dzvp-gth',
+            'pseudo': 'gth-lda',
+            'functional': 'lda',
+            'kinetic': 'lda_k_tf'
+        }
+    }
+
+    gen_cp2k = CP2KInputGenerator(config)
+    gen_cp2k.save_input(directory)
+
+    if any(info['method'] == 'wf' for info in config['info fragments'].values()):
+        config['molcas'] = {'basis set': 'ANO-S'}
+        gen_molcas = OpenMOLCASInputGenerator(config)
+        gen_molcas.save_input(directory)
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Generate CP2K input file for embedding theory")
-    parser.add_argument("xyz_dir", help="Path to the directory containing XYZ files")
+    parser.add_argument("input_path", help="Path to the directory containing subdirectories with XYZ files")
     parser.add_argument("--cell", nargs=3, type=float, default=[10, 10, 10], help="Cell size in Angstroms (e.g. --cell 10 10 10)")
-    parser.add_argument("--output", default=".", help="Output directory for the generated input file")
     return parser.parse_args()
 
 def main():
     args = parse_args()
 
-    config = {}
-    config['xyz dir'] = args.xyz_dir
-    config['molecule'] = os.path.basename(args.xyz_dir).replace('_xyz', '')
-    config['cell'] = args.cell
-    config['cp2k'] = {}
-    config['cp2k']['basis set']  = 'dzvp-gth'
-    config['cp2k']['pseudo']     = 'gth-lda'
-    config['cp2k']['functional'] = 'lda'
-    config['cp2k']['kinetic']    = 'lda_k_tf'
+    if not os.path.isdir(args.input_path):
+        print(f"Error: {args.input_path} is not a directory")
+        return
 
-    gen_cp2k = CP2KInputGenerator(config)
-    gen_cp2k.save_input(args.output)
-
-    if any(info['method'] == 'wf' for info in config['info fragments'].values()):
-        pass
-        config['molcas'] = {}
-        config['molcas']['basis set']  = 'ANO-S'
-
-        gen_molcas = OpenMOLCASInputGenerator(config)
-        gen_molcas.save_input(args.output)
+    for subdir in os.listdir(args.input_path):
+        full_path = os.path.join(args.input_path, subdir)
+        if os.path.isdir(full_path):
+            process_directory(full_path, args.cell)
 
 if __name__ == "__main__":
     main()
