@@ -66,16 +66,25 @@ class Runner:
         try:
             command = f"{self.runner} {os.path.basename(input_file)}"
             if self.use_output_flag:
-                command = f"{command} > {log_file}"
-
-            completed_process = subprocess.run(
-                command,
-                shell=True,
-                check=True,
-                cwd=output_dir,
-                capture_output=True,
-                text=True
-            )
+                with open(os.path.join(output_dir, log_file), 'w') as log_file_handle:
+                    completed_process = subprocess.run(
+                        command,
+                        shell=True,
+                        check=True,
+                        cwd=output_dir,
+                        stdout=log_file_handle,
+                        stderr=subprocess.STDOUT,
+                        text=True
+                    )
+            else:
+                completed_process = subprocess.run(
+                    command,
+                    shell=True,
+                    check=True,
+                    cwd=output_dir,
+                    capture_output=True,
+                    text=True
+                )
             result["status"] = "COMPLETED"
             result["message"] = "Calculation completed successfully"
         except subprocess.CalledProcessError as e:
