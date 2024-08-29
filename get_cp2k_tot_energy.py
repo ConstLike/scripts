@@ -49,6 +49,7 @@ def process_directory(directory):
 def main():
     parser = argparse.ArgumentParser(description="Extract CP2K energy information from log files.")
     parser.add_argument("input", help="Input directory with log files or subdirectories")
+    parser.add_argument("method", default='default', help="Input directory with log files or subdirectories")
     args = parser.parse_args()
 
     if not os.path.isdir(args.input):
@@ -57,13 +58,14 @@ def main():
 
     results = process_directory(args.input)
 
+    method = args.method
+
     for molecule, data in results.items():
-        output_filename = f"{molecule}_results.json"
+        output_filename = f"{molecule}_{method}_results.json"
         with open(output_filename, 'w') as outfile:
             json.dump({
                 "molecule": molecule,
-                "method": "CP2K",
-                "data": sorted(data, key=lambda x: x['distance'])
+                method: sorted(data, key=lambda x: x['distance'])
             }, outfile, indent=2)
         print(f"Results for {molecule} saved to {output_filename}")
 

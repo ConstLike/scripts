@@ -113,14 +113,15 @@ class Runner:
         else:
             input_files = self.find_input_files(self.input_path)
 
-        input_files.sort()
+        filtered_files = [f for f in input_files if "extern" not in f]
+        filtered_files.sort()
 
-        if not input_files:
+        if not filtered_files:
             self.log("No .inp files found in the specified directory or its subdirectories.")
             return
 
         with ProcessPoolExecutor(max_workers=self.max_workers) as executor:
-            future_to_file = {executor.submit(self.run_single_calculation, input_file): input_file for input_file in input_files}
+            future_to_file = {executor.submit(self.run_single_calculation, input_file): input_file for input_file in filtered_files}
             for future in as_completed(future_to_file):
                 self.results.append(future.result())
 
