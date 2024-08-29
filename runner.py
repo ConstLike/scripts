@@ -9,24 +9,20 @@ from datetime import datetime
 from typing import List, Dict, Any
 
 class Runner:
-    def __init__(self,
-                 runner: str,
-                 input_path: str,
-                 output_dir: str,
-                 total_cpus: int = None,
-                 omp_threads: int = None,
-                 use_output_flag: bool = False):
-        self.input_path = os.path.abspath(input_path)
-        self.output_dir = os.path.abspath(output_dir)
-        self.total_cpus = total_cpus if total_cpus is not None else os.cpu_count()
-        self.omp_threads = omp_threads if omp_threads is not None else self.total_cpus
+    def __init__(self, config: Dict[str, Any]):
+        self.config = config
+        self.input_path = os.path.abspath(config['input_path'])
+        self.output_dir = os.path.abspath(config['output_dir'])
+        self.total_cpus = config.get('total_cpus') if config.get('total_cpus') is not None else os.cpu_count()
+        self.omp_threads = config.get('omp_threads') if config.get('omp_threads') is not None else self.total_cpus
         self.max_workers = max(1, self.total_cpus // self.omp_threads)
         self.results: List[Dict[str, Any]] = []
         self.start_time = None
         self.end_time = None
-        self.runner = runner
-        self.use_output_flag = use_output_flag
+        self.runner = config['runner']
+        self.output_to_log = config.get('output_to_log', False)
         self.is_single_file = os.path.isfile(self.input_path)
+        self.max_restarts = config.get('max_restarts', 3)
 
         os.environ['OMP_NUM_THREADS'] = str(self.omp_threads)
 
@@ -60,36 +56,51 @@ class Runner:
             result["message"] = f"Input file {input_file} not found"
             return result
 
-        self.log(f"Running calculation for {input_file}")
-        start_time = time.perf_counter()
+        for attempt in range(self.max_restarts + 1):
+            self.log(f"Running calculation for {input_file} (Attempt {attempt + 1}/{self.max_restarts + 1})")
+            start_time = time.perf_counter()
 
-        try:
-            command = f"{self.runner} {os.path.basename(input_file)}"
-            if self.use_output_flag:
-                with open(os.path.join(output_dir, log_file), 'w') as log_file_handle:
+            try:
+                command = f"{self.runner} {os.path.basename(input_file)}"
+                if self.output_to_log:
+                    with open(os.path.join(output_dir, log_file), 'w') as log_file_handle:
+                        completed_process = subprocess.run(
+                            command,
+                            shell=True,
+                            check=True,
+                            cwd=output_dir,
+                            stdout=log_file_handle,
+                            stderr=subprocess.STDOUT,
+                            text=True
+                        )
+                else:
                     completed_process = subprocess.run(
                         command,
                         shell=True,
                         check=True,
                         cwd=output_dir,
-                        stdout=log_file_handle,
-                        stderr=subprocess.STDOUT,
+                        capture_output=True,
                         text=True
                     )
-            else:
-                completed_process = subprocess.run(
-                    command,
-                    shell=True,
-                    check=True,
-                    cwd=output_dir,
-                    capture_output=True,
-                    text=True
-                )
-            result["status"] = "COMPLETED"
-            result["message"] = "Calculation completed successfully"
-        except subprocess.CalledProcessError as e:
-            result["status"] = "ERROR"
-            result["message"] = f"Error: {str(e)}\nOutput: {e.output}"
+
+                with open(os.path.join(output_dir, log_file), 'r') as log_file_handle:
+                    log_content = log_file_handle.read()
+                    if "Segmentation fault" in log_content:
+                        raise subprocess.CalledProcessError(1, command, output="Segmentation fault detected in log file")
+
+                result["status"] = "COMPLETED"
+                result["message"] = "Calculation completed successfully"
+                break
+            except subprocess.CalledProcessError as e:
+                result["status"] = "ERROR"
+                result["message"] = f"Error: {str(e)}\nOutput: {e.output}"
+                result["restarts"] += 1
+
+                if "Segmentation fault" in str(e) and attempt < self.max_restarts:
+                    self.log(f"Segmentation fault detected. Restarting calculation (Attempt {attempt + 2}/{self.max_restarts + 1})")
+                    continue
+                else:
+                    break
 
         result["execution_time"] = time.perf_counter() - start_time
         return result
@@ -165,7 +176,7 @@ Total execution time: {self.format_time(total_time)}
             detailed_results += f"Execution time: {self.format_time(result['execution_time'])}\n"
             detailed_results += f"Message: {result['message']}\n"
 
-        return summary
+        return summary + detailed_results
 
     def run(self) -> str:
         self.log(f"Starting Runner calculations in: {self.input_path}")
@@ -174,16 +185,19 @@ Total execution time: {self.format_time(total_time)}
         self.log("Runner calculations completed")
         return report
 
-def main():
+def parse_args():
     parser = argparse.ArgumentParser(description="Run calculations in parallel")
     parser.add_argument("runner", help="Runner program")
     parser.add_argument("input_path", help="Path to input file or directory containing input files")
-    parser.add_argument("--log", type=bool, default=False, help="Write log file")
+    parser.add_argument("--log", action="store_true", help="Write output to log file")
     parser.add_argument("--output_dir", help="Output directory containing the calculation results")
     parser.add_argument("--total_cpus", type=int, default=None, help="Total number of CPUs to use")
     parser.add_argument("--omp_threads", type=int, default=None, help="Number of OMP threads per calculation")
+    parser.add_argument("--max_restarts", type=int, default=3, help="Maximum number of restarts for segmentation faults")
+    return parser.parse_args()
 
-    args = parser.parse_args()
+def main():
+    args = parse_args()
 
     if args.output_dir is None:
         if os.path.isfile(args.input_path):
@@ -193,14 +207,17 @@ def main():
     else:
         output_dir = args.output_dir
 
-    runner = Runner(
-            runner=args.runner,
-            input_path=args.input_path,
-            output_dir=output_dir,
-            total_cpus=args.total_cpus,
-            omp_threads=args.omp_threads,
-            use_output_flag=args.log
-    )
+    config = {
+        'runner': args.runner,
+        'input_path': args.input_path,
+        'output_dir': output_dir,
+        'total_cpus': args.total_cpus,
+        'omp_threads': args.omp_threads,
+        'max_restarts': args.max_restarts,
+        'output_to_log': args.log
+    }
+
+    runner = Runner(config)
     report = runner.run()
     print(report)
 
