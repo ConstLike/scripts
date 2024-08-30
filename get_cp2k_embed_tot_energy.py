@@ -40,7 +40,8 @@ def process_file(file_path):
 def process_directory(directory):
     results = defaultdict(list)
     for root, _, files in os.walk(directory):
-        for file in files:
+        filtered_files = [f for f in files if "extern" not in f]
+        for file in filtered_files:
             if file.endswith('.log'):
                 file_path = os.path.join(root, file)
                 molecule, data = process_file(file_path)
@@ -50,6 +51,7 @@ def process_directory(directory):
 def main():
     parser = argparse.ArgumentParser(description="Extract CP2K energy information from log files.")
     parser.add_argument("input", help="Input directory with log files or subdirectories")
+    parser.add_argument("method", default='default', help="Input directory with log files or subdirectories")
     args = parser.parse_args()
 
     if not os.path.isdir(args.input):
@@ -58,7 +60,7 @@ def main():
 
     results = process_directory(args.input)
 
-    method = "cp2k_fat"
+    method = args.method
 
     for molecule, data in results.items():
         output_filename = f"{molecule}_{method}_results.json"
