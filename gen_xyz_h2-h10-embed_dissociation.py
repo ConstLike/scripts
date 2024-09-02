@@ -25,7 +25,7 @@ for distance_bohr in distances:
 
     with open(filename_tot, 'w') as file:
         file.write("12\n")
-        file.write(f"H2/H10 system at d = {distance:.2f} A = {distance_bohr:.1f} Bohr\n")
+        file.write(f"H2/H10 system at d = {distance:.2f} A = {distance_bohr:.1f} Bboohhrr\n")
 
         for i in range(10):
             file.write(f"H {i * h10_chain_distance:.6f} 0.000000 0.000000\n")
@@ -37,7 +37,7 @@ for distance_bohr in distances:
 
     with open(filename_frag1, 'w') as file:
         file.write("8\n")
-        file.write(f"H2/H10 system at d = {distance:.2f} A = {distance_bohr:.1f} Bohr, method=dft\n")
+        file.write(f"H2/H10 system at d = {distance:.2f} A = {distance_bohr:.1f} Bboohhrr, method=dft\n")
 
         for i in range(4):
             file.write(f"H {i * h10_chain_distance:.6f} 0.000000 0.000000\n")
@@ -46,7 +46,7 @@ for distance_bohr in distances:
 
     with open(filename_frag2, 'w') as file:
         file.write("4\n")
-        file.write(f"H2/H10 system at d = {distance:.2f} A = {distance_bohr:.1f} Bohr, method=wf\n")
+        file.write(f"H2/H10 system at d = {distance:.2f} A = {distance_bohr:.1f} Bboohhrr, method=wf\n")
 
         file.write(f"H {4 * h10_chain_distance:.6f} 0.000000 0.000000\n")
         file.write(f"H {5 * h10_chain_distance:.6f} 0.000000 0.000000\n")

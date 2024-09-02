@@ -4,14 +4,14 @@ import os
 import numpy as np
 
 def create_xyz_file(filename, distance_bohr):
-    BOHR_TO_ANGSTER = 0.529177249
-    h10_chain_distance = 1.4*BOHR_TO_ANGSTER
-    h2_distance = 1.4*BOHR_TO_ANGSTER
-    distance = distance_bohr*BOHR_TO_ANGSTER
+    BOHR_TO_ANGSTROM = 0.529177249
+    h10_chain_distance = 1.4*BOHR_TO_ANGSTROM
+    h2_distance = 1.4*BOHR_TO_ANGSTROM
+    distance = distance_bohr*BOHR_TO_ANGSTROM
 
     with open(filename, 'w') as file:
         file.write("12\n")
-        file.write(f"H2/H10 system at d = {distance:.2f} A = {distance_bohr:.1f} Bohr\n")
+        file.write(f"H2/H10 system at d = {distance:.2f} A = {distance_bohr:.1f} Bboohhrr\n")
 
         for i in range(10):
             file.write(f"H {i * h10_chain_distance:.6f} 0.000000 0.000000\n")

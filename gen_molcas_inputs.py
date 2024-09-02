@@ -7,24 +7,34 @@ import sys
 
 
 class MolcasInputGenerator:
-    def __init__(self, xyz_file, basis_set, active_electrons, active_orbitals):
-        self.xyz_file = xyz_file
-        self.basis_set = basis_set
-        self.active_electrons = active_electrons
-        self.active_orbitals = active_orbitals
-        self.molecule_name = os.path.splitext(os.path.basename(xyz_file))[0]
+    def __init__(self, config):
+        self.xyz_file = config['xyz_file']
+        self.basis_set = config['basis_set']
+        self.active_electrons = config['active_electrons']
+        self.active_orbitals = config['active_orbitals']
+        self.molecule_name = os.path.splitext(os.path.basename(self.xyz_file))[0]
         self.num_atoms = 0
         self.num_electrons = 0
 
     def read_xyz(self):
-        with open(self.xyz_file, 'r') as f:
-            lines = f.readlines()
-        self.num_atoms = int(lines[0].strip())
-        self.xyz_content = ''.join(lines[2:])
+        try:
+            with open(self.xyz_file, 'r') as f:
+                lines = f.readlines()
+            self.num_atoms = int(lines[0].strip())
+            self.xyz_content = ''.join(lines[2:])
 
-        # Calculate number of electrons
-        elements = [line.split()[0] for line in lines[2:]]
-        self.num_electrons = sum(self.get_num_electrons(elem) for elem in elements)
+            elements = [line.split()[0] for line in lines[2:]]
+            self.num_electrons = sum(self.get_num_electrons(elem) for elem in elements)
+
+            if self.active_electrons is None or self.active_orbitals is None:
+                self.determine_active_space()
+
+        except IOError as e:
+            print(f"Error reading XYZ file: {e}")
+            sys.exit(1)
+        except ValueError as e:
+            print(f"Error parsing XYZ file: {e}")
+            sys.exit(1)
 
     @staticmethod
     def get_num_electrons(element):
@@ -46,13 +56,14 @@ class MolcasInputGenerator:
         }
         return element_dict.get(element, 0)
 
+    def determine_active_space(self):
+        valence_electrons = min(self.num_electrons, 14)
+        self.active_electrons = max(2, valence_electrons // 2)
+        self.active_orbitals = max(2, self.active_electrons)
+
     def generate_input(self):
-        if self.active_electrons > self.num_electrons:
-            return ""
-
         inactive = (self.num_electrons - self.active_electrons) // 2
-        n_roots = min(7, self.active_electrons * self.active_orbitals)  # Adjust number of roots based on active space
-
+        n_roots = min(7, self.active_electrons * self.active_orbitals)
 
         input_content = f"""
 &GATEWAY
@@ -87,59 +98,64 @@ class MolcasInputGenerator:
         return input_content
 
     def generate_input_file(self):
+        output_dir = os.path.dirname(self.xyz_file)
+
         self.general_name = f"{self.molecule_name}_{self.active_electrons}-{self.active_orbitals}"
-        output_dir = os.path.join(os.getcwd(), self.general_name)
-        os.makedirs(output_dir, exist_ok=True)
-
-        # Copy XYZ file to output directory
-        with open(self.xyz_file, 'r') as src, open(os.path.join(output_dir, f"{self.molecule_name}.xyz"), 'w') as dst:
-            dst.write(src.read())
-
         input_content = self.generate_input()
         filename = f"{self.general_name}.inp"
-        with open(os.path.join(output_dir, filename), 'w') as f:
-            f.write(input_content)
+        try:
+            with open(os.path.join(output_dir, filename), 'w') as f:
+                f.write(input_content)
+            print(f"Generated: {os.path.join(output_dir, filename)}")
+        except IOError as e:
+            print(f"Error writing input file: {e}")
+            sys.exit(1)
 
-def generate_active_spaces(min_electrons, max_electrons, min_orbitals, max_orbitals):
-    spaces = []
-    for electrons in range(min_electrons, max_electrons + 1, 1):
-        spaces.append((electrons, electrons))
-#       for orbitals in range(electrons, max_orbitals + 1):
-#           spaces.append((electrons, orbitals))
-    return spaces
+
+def process_xyz_file(xyz_file, config):
+    config['xyz_file'] = xyz_file
+    generator = MolcasInputGenerator(config)
+    generator.read_xyz()
+    generator.generate_input_file()
+
+def process_directory(directory, config):
+    for root, dirs, files in os.walk(directory):
+        for file in files:
+            if file.endswith('.xyz'):
+                xyz_file = os.path.join(root, file)
+                process_xyz_file(xyz_file, config)
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Generate OpenMolcas input file for a specific active space")
-    parser.add_argument("xyz_file", help="Path to the XYZ file")
-    parser.add_argument("--basis", default="ANO-S", help="Basis set to use (default: ANO-L-VDZP)")
-    parser.add_argument("--min_active_space", nargs=2, type=int, default=[4, 4],
-                        help="Number of active electrons and orbitals (e.g., --active_space 2 2)")
-    parser.add_argument("--max_active_space", nargs=2, type=int, default=[14, 14],
-                        help="Number of active electrons and orbitals (e.g., --active_space 2 2)")
+    parser = argparse.ArgumentParser(description="Generate OpenMolcas input files for XYZ files in directories")
+    parser.add_argument("input_path", help="Path to XYZ file, directory with XYZ files, or directory with subdirectories containing XYZ files")
+    parser.add_argument("--basis", default="ANO-S", help="Basis set to use (default: ANO-S)")
+    parser.add_argument("--active_space", nargs=2, type=int, default=[None, None],
+                        help="Active space: number of active electrons and orbitals")
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
 
-    if not os.path.exists(args.xyz_file):
-        print(f"Error: XYZ file '{args.xyz_file}' not found.")
+    config = {
+        'basis_set': args.basis,
+        'active_electrons': args.active_space[0],
+        'active_orbitals': args.active_space[1]
+    }
+
+    try:
+        if os.path.isfile(args.input_path):
+            if args.input_path.endswith('.xyz'):
+                process_xyz_file(args.input_path, config)
+            else:
+                raise ValueError(f"{args.input_path} is not an XYZ file.")
+        elif os.path.isdir(args.input_path):
+            process_directory(args.input_path, config)
+        else:
+            raise ValueError(f"{args.input_path} is not a valid file or directory.")
+    except (OSError, ValueError) as e:
+        print(f"Error: {e}")
         sys.exit(1)
-
-    active_spaces = generate_active_spaces(
-            args.min_active_space[0], args.max_active_space[0],
-            args.min_active_space[1], args.max_active_space[1]
-    )
-
-    for active_electrons, active_orbitals in active_spaces:
-        generator = MolcasInputGenerator(
-                args.xyz_file,
-                args.basis,
-                active_electrons,
-                active_orbitals
-        )
-        generator.read_xyz()
-        generator.generate_input_file()
 
 
 if __name__ == "__main__":

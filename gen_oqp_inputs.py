@@ -2,19 +2,16 @@
 
 # Developed by Konstantin Komarov.
 import os
-import numpy as np
+import argparse
+from typing import Dict, Any
 
 
 class OpenQPInputGenerator:
-    def __init__(self, methods, basis_sets, functionals, scftypes, tddfttypes, xyz_file, include_hf=True):
-        self.methods = methods
-        self.basis_sets = basis_sets
-        self.functionals = functionals
-        self.scftypes = scftypes
-        self.tddfttypes = tddfttypes
+    def __init__(self, config: Dict[str, Any], xyz_file: str):
+        self.config = config
+        self.xyz_file = xyz_file
         self.system_geometry = self.read_xyz_file(xyz_file)
         self.name_xyz = self.extract_xyz_name(xyz_file)
-        self.include_hf = include_hf
 
     def read_xyz_file(self, xyz_file):
         if not os.path.exists(xyz_file):
@@ -62,17 +59,17 @@ class OpenQPInputGenerator:
     def generate_input_configurations(self):
         input_configurations = []
 
-        for method in self.methods:
-            for basis in self.basis_sets:
-                for functional in self.functionals:
-                    for scftype in self.scftypes:
+        for method in self.config['methods']:
+            for basis in self.config['basis_sets']:
+                for functional in self.config['functionals']:
+                    for scftype in self.config['scftypes']:
                         scf_mult = 1 if scftype in ('rhf', 'uhf-s') else 3
                         scf = scftype.split('-')[0]
-                        if method == "hf" and self.include_hf:
+                        if method == "hf" and self.config.get('include_hf', True):
                             configuration = self.build_configuration(scf, scf_mult, method, basis, functional, None, f"{self.name_xyz}_{scftype}_{basis}_{functional}.inp")
                             input_configurations.append(configuration)
                         elif method == "tdhf":
-                            for tddft in self.tddfttypes:
+                            for tddft in self.config['tddfttypes']:
                                 if self.is_valid_tddft_scf_combination(scf, tddft):
                                     file_name = f"{self.name_xyz}_{scftype}_{tddft}_{basis}_{functional}.inp"
                                     configuration = self.build_configuration(scf, scf_mult, method, basis, functional, tddft, file_name)
@@ -130,6 +127,7 @@ class OpenQPInputGenerator:
                 "rad_npts": 96,
                 "ang_npts": 302,
                 "pruned": "",
+                "hfscale": 1.0,
             },
             "properties": {
                 "grad": 0 if tddft is None else 3,
@@ -146,91 +144,66 @@ class OpenQPInputGenerator:
             }
         return configuration
 
-    def __str__(self):
-        return f"OpenQPInputGenerator with {len(self.methods)} methods, {len(self.basis_sets)} basis sets, {len(self.functionals)} functionals, {len(self.scftypes)} SCF types, and {len(self.tddfttypes)} TDDFT types."
+def process_directory(directory: str, config: Dict[str, Any]):
+    for root, dirs, files in os.walk(directory):
+        for file in files:
+            if file.endswith('.xyz'):
+                xyz_file = os.path.join(root, file)
+                process_xyz_file(xyz_file, config)
 
+def process_xyz_file(xyz_file: str, config: Dict[str, Any]):
+    print(f"Processing {xyz_file}...")
+    generator = OpenQPInputGenerator(config, xyz_file)
+
+    # Generate the inputs
+    inputs = generator.generate_input_configurations()
+
+    output_dir = os.path.dirname(xyz_file)
+
+    for input_config in inputs:
+        file_path = os.path.join(output_dir, input_config['file_name'])
+        with open(file_path, 'w') as file:
+            for section, section_content in input_config.items():
+                if section == 'file_name':
+                    continue
+                file.write(f"[{section}]\n")
+                if isinstance(section_content, dict):
+                    for key, value in section_content.items():
+                        file.write(f"{key}={value}\n")
+                elif isinstance(section_content, str):
+                    file.write(f"{section_content}\n")
+                file.write("\n")
+        print(f"Generated: {file_path}")
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='Generate OpenQP input files.')
+    parser.add_argument('input_path', type=str, help='Path to the directory containing XYZ files or subdirectories with XYZ files')
+    return parser.parse_args()
 
 
 def main():
-    import os
-    import argparse
-    parser = argparse.ArgumentParser(description='Generate OpenQP input file.')
-    parser.add_argument('xyz_dir', type=str, help='Path to the directory containing XYZ files')
-    args = parser.parse_args()
+    args = parse_args()
 
-    xyz_dir = args.xyz_dir
-
-    if not os.path.isdir(xyz_dir):
-        print(f"Error: {xyz_dir} is not a valid directory.")
+    if not os.path.exists(args.input_path):
+        print(f"Error: {args.input_path} does not exist.")
         exit(1)
 
-    xyz_files = [file for file in os.listdir(xyz_dir) if file.endswith('.xyz')]
+    config = {
+        'methods': ["hf"],
+        'basis_sets': ["cc-pVDZ"],
+        'functionals': [""],
+        'scftypes': ["rhf"],
+        'tddfttypes': ["mrsf-s"],
+        'include_hf': True,
+    }
 
-    if not xyz_files:
-        print(f"Error: No XYZ files found in {xyz_dir}.")
+    if os.path.isfile(args.input_path) and args.input_path.endswith('.xyz'):
+        process_xyz_file(args.input_path, config)
+    elif os.path.isdir(args.input_path):
+        process_directory(args.input_path, config)
+    else:
+        print(f"Error: {args.input_path} is neither a valid XYZ file nor a directory.")
         exit(1)
-
-    for xyz_file in xyz_files:
-        project_name = os.path.splitext(os.path.basename(xyz_file))[0]
-        with open(os.path.join(xyz_dir,xyz_file), 'r') as file:
-            lines = file.readlines()[2:]  # Skip the first two lines
-#           if np.size(lines)>11:
-#               file.close()
-#               continue
-        file.close()
-        print(f"Processing {xyz_file}...")
-        methods=["tdhf",]
-#       methods=["hf", "tdhf"]
-        basis_sets=["cc-pVDZ"]
-        functionals=["slater","bhhlyp","dtcam-aee"]
-#       functionals=["dtcam-aee", "dtcam-vee", "dtcam-xi", "dtcam-xiv", "dtcam-vaee", "dtcam-tune"]
-#       scftypes=["rhf", "rohf", "uhf-s", "uhf-t"]
-        scftypes=["rohf"]
-#       tddfttypes=["rpa-s", "rpa-t", "tda-s", "tda-t", "mrsf-s", "mrsf-t", "mrsf-q", "sf"]
-        tddfttypes=["mrsf-s"]
-
-        generator = OpenQPInputGenerator(
-            methods=methods,
-            basis_sets=basis_sets,
-            functionals=functionals,
-            scftypes=scftypes,
-            tddfttypes=tddfttypes,
-            xyz_file=os.path.join(xyz_dir, xyz_file),
-            include_hf=False
-        )
-
-        # Generate the inputs
-        inputs = generator.generate_input_configurations()
-
-#       if "tdhf" in methods:
-#           output_dir = f"OQP_{project_name}_{scftypes[0]}_{tddfttypes[0]}_{basis_sets[0]}_{functionals[0]}"
-#       else:
-#           output_dir = f"OQP_{project_name}_{scftypes[0]}_{basis_sets[0]}_{functionals[0]}"
-        output_dir = xyz_dir
-        os.makedirs(output_dir, exist_ok=True)
-
-        for config in inputs:
-            file_path = os.path.join(output_dir, config['file_name'])
-            with open(file_path, 'w') as file:
-                for section, section_content in config.items():
-                    if section == 'file_name':
-                        continue
-                    file.write(f"[{section}]\n")
-                    if isinstance(section_content, dict):
-                        for key, value in section_content.items():
-                            file.write(f"{key}={value}\n")
-                    elif isinstance(section_content, str):
-                        file.write(f"{section_content}\n")
-                    file.write("\n")
-        # Print inputs
-        for config in inputs:
-            print(f"File Name: {config['file_name']}")
-            print(f"Method: {config['input']['method']}")
-            if 'tdhf' in config:
-                print("TDHF Section:")
-                for key, value in config['tdhf'].items():
-                    print(f"  {key}: {value}")
-            print("-" * 30)
 
 
 if __name__ == '__main__':

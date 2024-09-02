@@ -165,11 +165,11 @@ class CP2KInputGenerator:
   &dft
     basis_set_file_name GTH_BASIS_SETS
     potential_file_name GTH_POTENTIALS
-    &mgrid
-      ngrids 4
-      cutoff 210
-      rel_cutoff 40
-    &end mgrid
+#   &mgrid
+#     ngrids 4
+#     cutoff 210
+#     rel_cutoff 40
+#   &end mgrid
 """
 
         if method == "wf":
