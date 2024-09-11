@@ -7,17 +7,17 @@ from typing import Dict, List
 
 class CP2KInputGenerator:
     def __init__(self, config: Dict):
-        self.xyz_dir = config['xyz dir']
-        self.basis_set = config['cp2k']['basis set']
-        self.basis_path = config['cp2k']['basis path']
-        self.dft_functional = config['cp2k']['functional']
-        self.pseudopotential = config['cp2k']['pseudo']
-        self.pseudo_path = config['cp2k']['pseudo path']
-        self.cutoff = config['cp2k']['cutoff']
-        self.rel_cutoff = config['cp2k']['rel cutoff']
-        self.cell_size = config['cell']
+        self.xyz_dir = config["xyz dir"]
+        self.basis_set = config["cp2k"]["basis set"]
+        self.basis_path = config["cp2k"]["basis path"]
+        self.dft_functional = config["cp2k"]["functional"]
+        self.pseudopotential = config["cp2k"]["pseudo"]
+        self.pseudo_path = config["cp2k"]["pseudo path"]
+        self.cutoff = config["cp2k"]["cutoff"]
+        self.rel_cutoff = config["cp2k"]["rel cutoff"]
+        self.cell_size = config["cell"]
         self.do_hf = False
-        if self.dft_functional.lower() == 'none':
+        if self.dft_functional.lower() == "none":
             self.do_hf = True
 
     def generate_input(self, molecule_name: str, xyz_filename: str) -> str:
@@ -129,23 +129,32 @@ def process_input(input_path: str, config: Dict):
         input_content = generator.generate_input(molecule_name, xyz_filename)
         output_dir = os.path.dirname(xyz_path)
         file_name = f"{molecule_name}_{config['cp2k']['basis set'].lower()}_{config['cp2k']['functional'].lower()}_{config['cp2k']['pseudo'].lower()}.inp"
-        with open(os.path.join(output_dir, file_name), 'w') as f:
+        with open(os.path.join(output_dir, file_name), "w") as f:
             f.write(input_content)
         print(f"Generated: {os.path.join(output_dir, file_name)}")
 
-    if os.path.isfile(input_path) and input_path.endswith('.xyz'):
+    if os.path.isfile(input_path) and input_path.endswith(".xyz"):
         save_input(input_path)
     elif os.path.isdir(input_path):
         for root, dirs, files in os.walk(input_path):
             for file in files:
-                if file.endswith('.xyz'):
+                if file.endswith(".xyz"):
                     save_input(os.path.join(root, file))
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Generate CP2K input file")
-    parser.add_argument("input", help="Path to XYZ file, directory with XYZ files, or directory with subdirectories containing XYZ files")
-    parser.add_argument("--cell", nargs=3, type=float, default=[10, 10, 10], help="Cell size in Angstroms (e.g. --cell 20 20 20)")
+    parser.add_argument(
+        "input",
+        help="Path to XYZ file, directory with XYZ files, or directory with subdirectories containing XYZ files",
+    )
+    parser.add_argument(
+        "--cell",
+        nargs=3,
+        type=float,
+        default=[10, 10, 10],
+        help="Cell size in Angstroms (e.g. --cell 20 20 20)",
+    )
     return parser.parse_args()
 
 
@@ -153,23 +162,23 @@ def main():
     args = parse_args()
 
     config = {
-        'xyz dir': args.input,
-        'cell': args.cell,
-        'cp2k': {
-            'basis path': 'GTH_BASIS_SETS',
-            'basis set': 'DZVP-GTH',
-            'functional': 'LDA',
-#           'functional': 'NONE',
-#           'pseudo path': 'HF_POTENTIALS',
-            'pseudo path': 'GTH_POTENTIALS',
-            'pseudo': 'GTH-LDA',
-#           'pseudo': 'GTH-HF',
-            'cutoff': 210,
-            'rel cutoff': 30
-        }
+        "xyz dir": args.input,
+        "cell": args.cell,
+        "cp2k": {
+            "basis path": "GTH_BASIS_SETS",
+            "basis set": "DZVP-GTH",
+            "functional": "NONE",
+            "pseudo path": "HF_POTENTIALS",
+            # "pseudo path": "GTH_POTENTIALS",
+            "pseudo": "GTH-HF",
+            # "pseudo": "GTH-PBE",
+            "cutoff": 210,
+            "rel cutoff": 30,
+        },
     }
 
     process_input(args.input, config)
+
 
 if __name__ == "__main__":
     main()
