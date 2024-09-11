@@ -1,18 +1,24 @@
 #!/usr/bin/env python3
 
-import os
 import argparse
-from typing import List, Dict
+import os
+from typing import Dict, List
+
 
 class CP2KInputGenerator:
     def __init__(self, config: Dict):
         self.xyz_dir = config['xyz dir']
         self.basis_set = config['cp2k']['basis set']
+        self.basis_path = config['cp2k']['basis path']
         self.dft_functional = config['cp2k']['functional']
         self.pseudopotential = config['cp2k']['pseudo']
+        self.pseudo_path = config['cp2k']['pseudo path']
         self.cutoff = config['cp2k']['cutoff']
-        self.rel_cutoff = config['cp2k']['rel_cutoff']
+        self.rel_cutoff = config['cp2k']['rel cutoff']
         self.cell_size = config['cell']
+        self.do_hf = False
+        if self.dft_functional.lower() == 'none':
+            self.do_hf = True
 
     def generate_input(self, molecule_name: str, xyz_filename: str) -> str:
         input_content = f"""&GLOBAL
@@ -24,12 +30,12 @@ class CP2KInputGenerator:
 &FORCE_EVAL
   METHOD Quickstep
   &DFT
-    BASIS_SET_FILE_NAME GTH_BASIS_SETS
-    POTENTIAL_FILE_NAME GTH_POTENTIALS
-    &MGRID
-      CUTOFF {self.cutoff}
-      REL_CUTOFF {self.rel_cutoff}
-    &END MGRID
+    BASIS_SET_FILE_NAME {self.basis_path}
+    POTENTIAL_FILE_NAME {self.pseudo_path}
+#   &MGRID
+#     CUTOFF {self.cutoff}
+#     REL_CUTOFF {self.rel_cutoff}
+#   &END MGRID
     &QS
       METHOD GPW
       EPS_DEFAULT 1.0E-10
@@ -54,11 +60,30 @@ class CP2KInputGenerator:
         PRECONDITIONER FULL_SINGLE_INVERSE
       &END
     &END SCF
-    &XC
+"""
+        if self.do_hf:
+            input_content += f"""    &XC
+      &XC_FUNCTIONAL NONE
+      &END XC_FUNCTIONAL
+      &HF
+        FRACTION 1.0
+        &SCREENING
+          EPS_SCHWARZ 1.0E-10
+        &END
+        &INTERACTION_POTENTIAL
+          POTENTIAL_TYPE TRUNCATED
+          CUTOFF_RADIUS {self.cell_size[0]/2.0 - 0.5}
+        &END INTERACTION_POTENTIAL
+      &END HF
+    &END XC
+"""
+        else:
+            input_content += f"""    &XC
       &XC_FUNCTIONAL {self.dft_functional}
       &END XC_FUNCTIONAL
     &END XC
-    &PRINT
+"""
+        input_content += f"""    &PRINT
       &E_DENSITY_CUBE
         STRIDE 1 1 1
       &END E_DENSITY_CUBE
@@ -94,6 +119,7 @@ class CP2KInputGenerator:
 """
         return input_content
 
+
 def process_input(input_path: str, config: Dict):
     generator = CP2KInputGenerator(config)
 
@@ -115,11 +141,13 @@ def process_input(input_path: str, config: Dict):
                 if file.endswith('.xyz'):
                     save_input(os.path.join(root, file))
 
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Generate CP2K input file")
     parser.add_argument("input", help="Path to XYZ file, directory with XYZ files, or directory with subdirectories containing XYZ files")
     parser.add_argument("--cell", nargs=3, type=float, default=[10, 10, 10], help="Cell size in Angstroms (e.g. --cell 20 20 20)")
     return parser.parse_args()
+
 
 def main():
     args = parse_args()
@@ -128,11 +156,16 @@ def main():
         'xyz dir': args.input,
         'cell': args.cell,
         'cp2k': {
-            'basis set': 'dzvp-gth',
-            'functional': 'lda',
-            'pseudo': 'gth-lda',
+            'basis path': 'GTH_BASIS_SETS',
+            'basis set': 'DZVP-GTH',
+            'functional': 'LDA',
+#           'functional': 'NONE',
+#           'pseudo path': 'HF_POTENTIALS',
+            'pseudo path': 'GTH_POTENTIALS',
+            'pseudo': 'GTH-LDA',
+#           'pseudo': 'GTH-HF',
             'cutoff': 210,
-            'rel_cutoff': 30
+            'rel cutoff': 30
         }
     }
 

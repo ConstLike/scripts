@@ -1,22 +1,23 @@
 #!/usr/bin/env python3
 
 # Developed by Konstantin Komarov.
-import os
 import argparse
-import subprocess
-import numpy as np
-from typing import List, Tuple
 import json
+import subprocess
+import time
+from typing import List, Tuple
+
+import numpy as np
+
 
 class CP2KInputGenerator:
-    def __init__(self, xyz_file: str, basis_set: str, functional: str):
+    def __init__(self, xyz_file: str, basis_set: str, functional: str, pseudo: str):
         self.xyz_file = xyz_file
         self.basis_set = basis_set
         self.functional = functional
+        self.pseudo = pseudo
 
     def generate_input(self, cutoff: float, rel_cutoff: float) -> str:
-        with open(self.xyz_file, 'r') as f:
-            xyz_content = f.read()
 
         input_content = f"""&GLOBAL
   PROJECT cutoff_optimization
@@ -67,16 +68,20 @@ class CP2KInputGenerator:
     &END TOPOLOGY
     &KIND DEFAULT
       BASIS_SET {self.basis_set}
-      POTENTIAL GTH-{self.functional}
+      POTENTIAL {self.pseudo}
     &END KIND
   &END SUBSYS
 &END FORCE_EVAL
 """
         return input_content
 
+
 def run_cp2k(input_file: str) -> Tuple[float, List[int]]:
 #   print(f"Running CP2K with input file: {input_file}")
-    result = subprocess.run(['cp2k.sopt', '-i', input_file], capture_output=True, text=True)
+    time.sleep(1)
+    result = subprocess.run(['cp2k.sdbg', '-i', input_file], capture_output=True, text=True)
+    time.sleep(1)
+
     output = result.stdout
     error = result.stderr
 
@@ -101,8 +106,9 @@ def run_cp2k(input_file: str) -> Tuple[float, List[int]]:
 
     return energy, grid_distribution
 
-def optimize_cutoff(xyz_file: str, basis_set: str, functional: str, rel_cutoff: float = 60, convergence_threshold: float = 1e-5):
-    input_gen = CP2KInputGenerator(xyz_file, basis_set, functional)
+
+def optimize_cutoff(xyz_file: str, basis_set: str, functional: str, pseudo: str, rel_cutoff: float = 60, convergence_threshold: float = 1e-5):
+    input_gen = CP2KInputGenerator(xyz_file, basis_set, functional, pseudo)
     print(f"Convergence threshold in optimization CATOFF: {convergence_threshold:.3E}")
 
     cutoffs = np.arange(50, 1001, 20)  # Extended range
@@ -111,7 +117,8 @@ def optimize_cutoff(xyz_file: str, basis_set: str, functional: str, rel_cutoff: 
 
     for cutoff in cutoffs:
         input_content = input_gen.generate_input(cutoff, rel_cutoff)
-        with open('input.inp', 'w') as f:
+        time.sleep(1)
+        with open('input.inp', 'w', encoding="utf-8") as f:
             f.write(input_content)
 
         energy, grid_distribution = run_cp2k('input.inp')
@@ -135,8 +142,8 @@ def optimize_cutoff(xyz_file: str, basis_set: str, functional: str, rel_cutoff: 
     print("Warning: Convergence not reached within the given CUTOFF range")
     return results, cutoffs[-1]
 
-def optimize_rel_cutoff(xyz_file: str, basis_set: str, functional: str, cutoff: float, convergence_threshold: float = 1e-4):
-    input_gen = CP2KInputGenerator(xyz_file, basis_set, functional)
+def optimize_rel_cutoff(xyz_file: str, basis_set: str, functional: str, pseudo: str,  cutoff: float, convergence_threshold: float = 1e-4):
+    input_gen = CP2KInputGenerator(xyz_file, basis_set, functional, pseudo)
     print(f"Convergence threshold in optimization REL_CATOFF: {convergence_threshold:.3E}")
 
     rel_cutoffs = np.arange(10, 201, 10)  # Extended range just in case
@@ -145,7 +152,7 @@ def optimize_rel_cutoff(xyz_file: str, basis_set: str, functional: str, cutoff: 
 
     for rel_cutoff in rel_cutoffs:
         input_content = input_gen.generate_input(cutoff, rel_cutoff)
-        with open('input.inp', 'w') as f:
+        with open('input.inp', 'w', encoding="utf-8") as f:
             f.write(input_content)
 
         energy, grid_distribution = run_cp2k('input.inp')
@@ -217,35 +224,39 @@ def optimize_rel_cutoff(xyz_file: str, basis_set: str, functional: str, cutoff: 
 #
 #    return results, optimal_rel_cutoff
 
+
 def parse_args():
     parser = argparse.ArgumentParser(description="cutoff optimization")
     parser.add_argument("xyz_file", help="Path to the XYZ file")
     return parser.parse_args()
 
+
 def main():
     args = parse_args()
 
-    basis_set = "dzvp-gth"
-    functional = "PADE"
+    basis_set = "DZVP-GTH"
+    functional = "PBE"
+    pseudo = "GTH-PBE"
     convergence_threshold_cutoff = 1e-4
     convergence_threshold_rel_cutoff = 1e-5
 
     # Optimize CUTOFF
-    cutoff_results, optimal_cutoff = optimize_cutoff(args.xyz_file, basis_set, functional, convergence_threshold=convergence_threshold_cutoff)
+    cutoff_results, optimal_cutoff = optimize_cutoff(args.xyz_file, basis_set, functional, pseudo, convergence_threshold=convergence_threshold_cutoff)
     print(f"Optimal CUTOFF: {optimal_cutoff}")
 
     # Optimize REL_CUTOFF
-    rel_cutoff_results, optimal_rel_cutoff = optimize_rel_cutoff(args.xyz_file, basis_set, functional, optimal_cutoff, convergence_threshold=convergence_threshold_rel_cutoff)
+    rel_cutoff_results, optimal_rel_cutoff = optimize_rel_cutoff(args.xyz_file, basis_set, functional, pseudo, optimal_cutoff, convergence_threshold=convergence_threshold_rel_cutoff)
     print(f"Optimal REL_CUTOFF: {optimal_rel_cutoff}")
 
     # Save results
-    with open('optimization_results.json', 'w') as f:
+    with open('optimization_results.json', 'w', emcoding="utf-8") as f:
         json.dump({
             'cutoff_optimization': cutoff_results,
             'rel_cutoff_optimization': rel_cutoff_results,
             'optimal_cutoff': float(optimal_cutoff),
             'optimal_rel_cutoff': float(optimal_rel_cutoff)
         }, f, indent=2)
+
 
 if __name__ == "__main__":
     main()

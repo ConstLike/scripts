@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
 # Developed by Konstantin Komarov.
-import os
 import argparse
+import os
 import sys
 
 
@@ -78,22 +78,27 @@ class MolcasInputGenerator:
 &RASSCF
   Spin = 1
   Symmetry = 1
-  nActEl = {self.active_electrons} 0 0
+  nActEl = {self.active_electrons} 2 2  #all electrons minus twice the number of inactive and frozen orbitals)
   Inactive = {inactive}
+  FROZen = 0
+  RAS1 = 2
   RAS2 = {self.active_orbitals}
-  CIRoot = {n_roots} {n_roots} 1
+  RAS3 = 2
+# CIRoot = {n_roots} {n_roots} 1
+  CIRoot = 1 1 1
+# ALTEr = 4; 1 7 9; 1 8 11; 1 9 13; 1 10 17
   LevShift = 0.5
 
-&RASSI
-  NrOfJobIphs = 1 {n_roots}
-  {' '.join(str(i) for i in range(1, n_roots + 1))}
-  XVES
-  MEES
-  PROP
-  3
-  'MLTPL  1' 1
-  'MLTPL  1' 2
-  'MLTPL  1' 3
+#&RASSI
+#  NrOfJobIphs = 1 {n_roots}
+#  {' '.join(str(i) for i in range(1, n_roots + 1))}
+#  XVES
+#  MEES
+#  PROP
+#  3
+#  'MLTPL  1' 1
+#  'MLTPL  1' 2
+#  'MLTPL  1' 3
 """
         return input_content
 

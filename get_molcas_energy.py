@@ -6,30 +6,35 @@ import json
 import argparse
 from collections import defaultdict
 
-
 def extract_info_from_filename(filename):
     parts = filename.split('_')
-    molecule_and_distance = parts[1]
+    molecule_and_distance = parts[0]
     molecule = '-'.join(molecule_and_distance.split('-')[:-1])
     distance = float(molecule_and_distance.split('-')[-1])
-    basis = parts[-3]
-    functional = parts[-2]
-    pseudopotential = parts[-1].replace('.log', '')
-    return molecule, distance, basis, functional, pseudopotential
+    active_electrons = parts[-2]
+    active_orbitals = parts[-1].replace('.log', '')
+    return molecule, distance, active_electrons, active_orbitals
 
-
-def extract_cp2k_total_energy(content):
-    match = re.search(r'ENERGY\| Total FORCE_EVAL \( FAT \) energy \[a\.u\.\]:\s+([-\d.]+)', content)
+def extract_molcas_rasscf_1_energy(content):
+    match = re.search(r'::    RASSCF root number  1 Total energy:\s+([-\d.]+)', content)
     return float(match.group(1)) if match else None
 
+def extract_molcas_scf_energy(content):
+    match = re.search(r'::    Total SCF energy\s+([-\d.]+)', content)
+    return float(match.group(1)) if match else None
 
 def process_file(file_path):
     filename = os.path.basename(file_path)
-    molecule, distance, basis, functional, pseudopotential = extract_info_from_filename(filename)
+    molecule, distance, active_electrons, active_orbitals = extract_info_from_filename(filename)
 
     with open(file_path, 'r') as file:
         content = file.read()
-        total_energy = extract_cp2k_total_energy(content)
+        total_energy = extract_molcas_rasscf_1_energy(content)
+#       total_energy = extract_molcas_scf_energy(content)
+
+    basis = "dzvp-gth"
+    functional = "lda"
+    pseudopotential = "gth-lda"
 
     return molecule, {
         "distance": distance,
@@ -39,7 +44,6 @@ def process_file(file_path):
         "pseudopotential": pseudopotential,
         "logfile": os.path.abspath(file_path)
     }
-
 
 def process_directory(directory):
     results = defaultdict(list)
@@ -51,7 +55,6 @@ def process_directory(directory):
                 molecule, data = process_file(file_path)
                 results[molecule].append(data)
     return results
-
 
 def main():
     parser = argparse.ArgumentParser(description="Extract CP2K energy information from log files.")
@@ -75,7 +78,6 @@ def main():
                 method: sorted(data, key=lambda x: x['distance'])
             }, outfile, indent=2)
         print(f"Results for {molecule} saved to {output_filename}")
-
 
 if __name__ == "__main__":
     main()

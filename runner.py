@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 
+import argparse
 import os
 import subprocess
-import argparse
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import Any, Dict, List
+
 
 class Runner:
     def __init__(self, config: Dict[str, Any]):
@@ -65,7 +66,7 @@ class Runner:
                 command = f"{self.runner} {os.path.basename(input_file)}"
                 if self.output_to_log:
                     with open(os.path.join(output_dir, log_file), 'w') as log_file_handle:
-                        completed_process = subprocess.run(
+                        subprocess.run(
                             command,
                             shell=True,
                             check=True,
@@ -75,7 +76,7 @@ class Runner:
                             text=True
                         )
                 else:
-                    completed_process = subprocess.run(
+                    subprocess.run(
                         command,
                         shell=True,
                         check=True,
@@ -84,7 +85,7 @@ class Runner:
                         text=True
                     )
 
-                with open(os.path.join(output_dir, log_file), 'r') as log_file_handle:
+                with open(os.path.join(output_dir, log_file), 'r') as runner_log_file_handle:
                     log_content = log_file_handle.read()
                     if "Segmentation fault" in log_content:
                         raise subprocess.CalledProcessError(1, command, output="Segmentation fault detected in log file")
@@ -93,16 +94,19 @@ class Runner:
                 result["message"] = "Calculation completed successfully"
                 break
             except subprocess.CalledProcessError as e:
-                result["status"] = "ERROR"
-                result["message"] = f"Error: {str(e)}\nOutput: {e.output}"
-                result["restarts"] += 1
-
-                if e.returncode == 139 or "Segmentation fault" in str(e):
+                if e.returncode == 139:
+                    result["status"] = "ERROR"
+                    result["message"] = f"Error: {str(e)}\nOutput: {e.output}"
+                    result["restarts"] += 1
                     if attempt < self.max_restarts:
                         self.log(f"Segmentation fault detected. Restarting calculation (Attempt {attempt + 2}/{self.max_restarts + 1})")
                         continue
                     else:
                         result["message"] += "\nMax restarts reached after segmentation faults."
+                else:
+                    result["status"] = "ERROR"
+                    result["message"] = f"Error: {str(e)}\nOutput: {e.output}"
+
                 break
 
         result["execution_time"] = time.perf_counter() - start_time
@@ -180,7 +184,15 @@ Total execution time: {self.format_time(total_time)}
             detailed_results += f"Restarts: {result['restarts']}\n"
             detailed_results += f"Message: {result['message']}\n"
 
-        return summary + detailed_results
+        full_report = summary + detailed_results
+
+        report_filename = "runner_report.txt"
+        with open(report_filename, 'w') as report_file:
+            report_file.write(full_report)
+
+        self.log(f"Report written to {report_filename}")
+
+        return summary
 
     def run(self) -> str:
         self.log(f"Starting Runner calculations in: {self.input_path}")
@@ -199,6 +211,7 @@ def parse_args():
     parser.add_argument("--omp_threads", type=int, default=None, help="Number of OMP threads per calculation")
     parser.add_argument("--max_restarts", type=int, default=3, help="Maximum number of restarts for segmentation faults")
     return parser.parse_args()
+
 
 def main():
     args = parse_args()
@@ -224,6 +237,7 @@ def main():
     runner = Runner(config)
     report = runner.run()
     print(report)
+
 
 if __name__ == "__main__":
     main()

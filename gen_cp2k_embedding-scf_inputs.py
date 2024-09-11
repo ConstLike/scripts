@@ -278,7 +278,7 @@ class CP2KInputGenerator:
         output_path = output_dir
         os.makedirs(output_path, exist_ok=True)
         filename = f"{file_name}.inp"
-        with open(os.path.join(output_path, filename), 'w') as f:
+        with open(os.path.join(output_path, filename), 'w', encoding="utf-8") as f:
             f.write(self.generate_input())
         print(f"Generated: {os.path.join(output_path, filename)}")
 
@@ -315,10 +315,6 @@ class OpenMOLCASInputGenerator:
         grid_origin = [-size/2 for size in cell_au]
 
         n_electrons = self.fragment_info[f'frag{fragment_number}.xyz']['electrons']
-        active_space = self.generate_active_space(n_electrons)
-        active_electrons = active_space[0]
-        active_orbitals = active_space[1]
-        inactive = (n_electrons - active_electrons) // 2
 
         input_content = f"""> copy $CurrDir/vemb_{fragment_number}.dat $WorkDir
 > copy $CurrDir/{self.molecule_name}_xyz/frag{fragment_number}.xyz $WorkDir
@@ -335,18 +331,8 @@ class OpenMOLCASInputGenerator:
 
 &scf
 
-&rasscf
-   Spin=1
-   Symmetry=1
-   nActEl={active_electrons} 0 0
-   Inactive={inactive}
-   RAS1=0
-   RAS2={active_orbitals}
-   RAS3=0
-   CIRoot=1 1 1
-
 &grid_it
-  name=rasscf
+  name=Scf
   npoints=107 107 107
   gori
   {grid_origin[0]:.7f} {grid_origin[1]:.7f} {grid_origin[2]:.7f}
@@ -361,8 +347,8 @@ class OpenMOLCASInputGenerator:
     def generate_run_script(self, fragment_number: str) -> str:
         script_content = f"""#!/bin/sh
 pymolcas extern_{fragment_number}.inp | tee extern_{fragment_number}.out
-grep "1 Total energy" extern_{fragment_number}.out | awk '{{ print $8 }}' > extern_{fragment_number}.e
-python2 $MOLCAS/Tools/grid2cube/grid2cube.py extern_{fragment_number}.rasscf.lus extern_{fragment_number}_orig.cube
+grep "Total SCF energy" extern_{fragment_number}.out | awk '{{ print $5 }}' > extern_{fragment_number}.e
+python2 $MOLCAS/Tools/grid2cube/grid2cube.py extern_{fragment_number}.Scf.lus extern_{fragment_number}_orig.cube
 python3 roll_cubefile.py extern_{fragment_number}_orig.cube extern_{fragment_number}.cube
 
 """
@@ -450,11 +436,10 @@ def main():
         'cp2k': {
             'basis path': 'GTH_BASIS_SETS',
             'basis set': 'DZVP-GTH',
-            'functional': 'LDA',
-#           'functional': 'NONE',
-            'kinetic': 'LDA_K_TF',
-            'pseudo path': 'GTH_POTENTIALS',
-            'pseudo': 'GTH-LDA',
+            'functional': 'NONE',
+            'kinetic': 'LDA_K_ZLP',
+            'pseudo path': 'HF_POTENTIALS',
+            'pseudo': 'GTH-HF',
             'mgrid': {
                 'cutoff': 210,
                 'rel cutoff': 30
