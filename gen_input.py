@@ -38,6 +38,10 @@ def parse_args():
 
 def main_molcas(args, config):
     """ molcas generator."""
+
+    if config['calc type'].lower() == 'hf':
+        config.update({"functional": 'hf'})
+
     try:
         if os.path.isfile(args.input_path):
             if args.input_path.endswith('.xyz'):
@@ -60,6 +64,7 @@ def main():
     config = {
         "OpenMolcas": {
             "basis set": 'ANO-S',
+            "functional": 'lda',
             "calc type": 'caspt2',
             "active space": [12, 12],
             "symm a1": 7,

@@ -49,7 +49,7 @@ class MolcasInputGenerator:
 &SCF
   CHARge = 0
   SPIN = 1
-  KSDFt = lda
+  KSDFt = {self.config['functional']}
 """
         return content
 
