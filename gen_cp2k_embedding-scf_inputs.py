@@ -411,6 +411,28 @@ class OpenMOLCASInputGenerator:
         ]
         self.min_active_space = [2, 6]
         self.max_active_space = [14, 14]
+    
+    def get_basis(self):
+        content = """  Basis set
+* HYDROGEN  (4s,1p) -> [2s,1p]
+ H    / inline
+      1.00   1
+* S-type functions
+     4    2
+               1.301000E+01
+               1.962000E+00
+               4.446000E-01
+               1.220000E-01
+      1.968500E-02           0.000000E+00
+      1.379770E-01           0.000000E+00
+      4.781480E-01           0.000000E+00
+      5.012400E-01           1.000000E+00
+* P-type functions
+     1    1
+               7.270000E-01
+      1.0000000
+End of basis basis_set"""
+        return content
 
     def _angstrom_to_au(self, value: float) -> float:
         #       return value * 1.8897259886
@@ -449,6 +471,11 @@ class OpenMOLCASInputGenerator:
   ENDEmbedding
 
 &scf
+  charge=0
+
+&scf
+  charge=0
+  ksdft=lda
 
 &grid_it
   name=Scf
@@ -528,10 +555,15 @@ def process_input(input_path: str, config: Dict[str, Any]):
         generator = CP2KInputGenerator(config_copy)
         generator.save_input(os.path.dirname(xyz_dir))
 
+<<<<<<< HEAD
         if any(info["method"] == "wf" for info in generator.fragment_info.values()):
             molcas_config = config_copy.copy()
             molcas_config["molcas"] = config.get("molcas", {"basis set": "ANO-S"})
             gen_molcas = OpenMOLCASInputGenerator(molcas_config)
+=======
+        if any(info['method'] == 'wf' for info in generator.fragment_info.values()):
+            gen_molcas = OpenMOLCASInputGenerator(config_copy)
+>>>>>>> 3dd6c46 (some fix)
             gen_molcas.save_input(os.path.dirname(xyz_dir))
 
     if os.path.isdir(input_path):
@@ -564,6 +596,7 @@ def main():
     args = parse_args()
 
     config = {
+<<<<<<< HEAD
         "cell": args.cell,
         "cp2k": {
             "basis path": "GTH_BASIS_SETS",
@@ -574,6 +607,24 @@ def main():
             "pseudo": "GTH-HF",
             "mgrid": {"cutoff": 210, "rel cutoff": 30},
         },
+=======
+        'cell': args.cell,
+        'cp2k': {
+            'basis path': 'GTH_BASIS_SETS',
+            'basis set': 'DZVP-GTH',
+            'functional': 'LDA',
+            'kinetic': 'LDA_K_TF',
+            'pseudo path': 'GTH_POTENTIALS',
+            'pseudo': 'GTH-LDA',
+            'mgrid': {
+                'cutoff': 210,
+                'rel cutoff': 30
+            }
+        },
+        'molcas': {
+            'basis set': 'ANO-S'  # DZ, TZ, ANO-S-VDZP,
+        }
+>>>>>>> 3dd6c46 (some fix)
     }
 
     process_input(args.input_path, config)
