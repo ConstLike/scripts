@@ -36,21 +36,8 @@ def parse_args():
     return parser.parse_args()
 
 
-def main_molcas():
-    """ main. """
-    args = parse_args()
-
-    config = {
-        "basis set": 'ANO-S',
-        "calc type": 'caspt2',
-        "active space": [12, 12],
-        "symm a1": 7,
-        "symm b2": 1,
-        "symm b1": 4,
-        "symm a2": 0,
-        "num roots": 1
-    }
-
+def main_molcas(args, config):
+    """ molcas generator."""
     try:
         if os.path.isfile(args.input_path):
             if args.input_path.endswith('.xyz'):
@@ -66,5 +53,42 @@ def main_molcas():
         sys.exit(1)
 
 
+def main():
+    """ main. """
+    args = parse_args()
+
+    config = {
+        "OpenMolcas": {
+            "basis set": 'ANO-S',
+            "calc type": 'caspt2',
+            "active space": [12, 12],
+            "symm a1": 7,
+            "symm b2": 1,
+            "symm b1": 4,
+            "symm a2": 0,
+            "num roots": 1
+        },
+        "CP2K_DFT": {
+            "basis set": 'DZVP-GTH',
+        },
+        "CP2K_DFT-in-DFT": {
+            "basis set": 'DZVP-GTH',
+        },
+        "CP2K_WF-in-DFT": {
+            "basis set": 'DZVP-GTH',
+            "wf basis set": 'ANO-S',
+            "calc type": 'caspt2',
+            "active space": [12, 12],
+            "symm a1": 7,
+            "symm b2": 1,
+            "symm b1": 4,
+            "symm a2": 0,
+            "num roots": 1
+        },
+    }
+
+    main_molcas(args, config['OpenMolcas'])
+
+
 if __name__ == "__main__":
-    main_molcas()
+    main()
