@@ -25,7 +25,7 @@ def process_xyz_file(xyz_file: str, config: Dict) -> None:
         a1, a2 = config['symm a1'], config['symm a2']
         b1, b2 = config['symm b1'], config['symm b2']
         active_e, active_o = config['active space']
-        subfolder = f"{basis_set}_{calc_type}_{a1}-{b2}-{b1}-{a2}_{active_e}-{active_o}"
+        subfolder = f"{basis_set}_{calc_type}_{a1}-{b1}-{a2}-{b2}_{active_e}-{active_o}"
 
     output_dir = os.path.join(dir_name, subfolder)
     os.makedirs(output_dir, exist_ok=True)
@@ -80,11 +80,11 @@ def main():
             "basis set": 'ANO-S',
             "functional": 'lda',
             "calc type": 'dft',
-            "active space": [12, 12],
-            "symm a1": 7,
-            "symm b2": 1,
+            "active space": [12, 14],
+            "symm a1": 6,
             "symm b1": 4,
-            "symm a2": 0,
+            "symm a2": 3,
+            "symm b2": 1,
             "num roots": 1
         },
         "CP2K_DFT": {
@@ -99,15 +99,15 @@ def main():
             "calc type": 'caspt2',
             "active space": [12, 12],
             "symm a1": 7,
-            "symm b2": 1,
-            "symm b1": 4,
+            "symm b1": 1,
             "symm a2": 0,
+            "symm b2": 4,
             "num roots": 1
         },
     }
 
     basis_sets = ['CC-PVTZ',]
-    calc_types = ['hf', 'dft', 'caspt2']
+    calc_types = ['caspt2',]
     functionals = ['lda',]
     for basis in basis_sets:
         for calc_type in calc_types:

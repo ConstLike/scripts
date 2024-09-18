@@ -84,7 +84,7 @@ class MolcasInputGenerator:
   nActEl = {active_e} 0 0
   Inactive =  0 0 0 0
   RAS1 = 0 0 0 0
-  RAS2 = {a1} {b2} {b1} {a2}
+  RAS2 = {a1} {b1} {a2} {b2}
   RAS3 = 0 0 0 0
   CIRoot = {n_roots} {n_roots} 1
   LevShift = 0.5
