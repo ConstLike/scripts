@@ -15,7 +15,21 @@ def process_xyz_file(xyz_file: str, config: Dict) -> None:
     config = InputUtils.get_mol_info(xyz_file, config)
     generator = MolcasInputGenerator(config)
     dir_name = os.path.dirname(os.path.abspath(xyz_file))
-    generator.save_input(dir_name)
+
+    calc_type = config['calc type'].lower()
+    basis_set = config['basis set'].lower()
+    if calc_type in ['hf', 'dft']:
+        functional = config['functional'].lower()
+        subfolder = f"{basis_set}_{calc_type}_{functional}"
+    else:
+        a1, a2 = config['symm a1'], config['symm a2']
+        b1, b2 = config['symm b1'], config['symm b2']
+        active_e, active_o = config['active space']
+        subfolder = f"{basis_set}_{calc_type}_{a1}-{b2}-{b1}-{a2}_{active_e}-{active_o}"
+
+    output_dir = os.path.join(dir_name, subfolder)
+    os.makedirs(output_dir, exist_ok=True)
+    generator.save_input(output_dir)
 
 
 def process_directory(directory: str, config: Dict) -> None:
@@ -65,7 +79,7 @@ def main():
         "OpenMolcas": {
             "basis set": 'ANO-S',
             "functional": 'lda',
-            "calc type": 'caspt2',
+            "calc type": 'dft',
             "active space": [12, 12],
             "symm a1": 7,
             "symm b2": 1,
@@ -92,7 +106,16 @@ def main():
         },
     }
 
-    main_molcas(args, config['OpenMolcas'])
+    basis_sets = ['CC-PVTZ',]
+    calc_types = ['hf', 'dft', 'caspt2']
+    functionals = ['lda',]
+    for basis in basis_sets:
+        for calc_type in calc_types:
+            for functional in functionals:
+                config['OpenMolcas'].update({"basis set": basis})
+                config['OpenMolcas'].update({"calc type": calc_type})
+                config['OpenMolcas'].update({"functional": functional})
+                main_molcas(args, config['OpenMolcas'])
 
 
 if __name__ == "__main__":

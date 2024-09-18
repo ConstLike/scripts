@@ -11,6 +11,7 @@
   config['symm a2'] = int()
   config['num roots'] = int()
 """
+import os
 import sys
 from typing import Dict
 
@@ -22,7 +23,9 @@ class MolcasInputGenerator:
 
     def gen_input_hf(self) -> str:
         """Generates Molcas input for HF."""
-        content = f"""&GATEway
+        content = f"""> copy $CurrDir/../{self.config['xyz file']} $WorkDir/.
+
+&GATEway
   COORd = {self.config['xyz file']}
   BASIs = {self.config['basis set']}
 
@@ -36,7 +39,9 @@ class MolcasInputGenerator:
 
     def gen_input_dft(self) -> str:
         """Generates Molcas input DFT."""
-        content = f"""&GATEway
+        content = f"""> copy $CurrDir/../{self.config['xyz file']} $WorkDir/.
+
+&GATEway
   COORd = {self.config['xyz file']}
   BASIs = {self.config['basis set']}
 
@@ -61,7 +66,9 @@ class MolcasInputGenerator:
         a2 = self.config['symm a2']
         active_e, _ = self.config['active space']
         n_roots = self.config['num roots']
-        content = f"""&GATEway
+        content = f"""> copy $CurrDir/../{self.config['xyz file']} $WorkDir/.
+
+&GATEway
   COORd = {self.config['xyz file']}
   BASIs = {self.config['basis set']}
 
@@ -125,6 +132,8 @@ class MolcasInputGenerator:
         mol_name = self.config['mol name']
         active_e, active_o = self.config['active space']
         filename = f"{mol_name}_{active_e}-{active_o}.inp"
+        filepath = os.path.join(output_dir, filename)
+
         filepath = f"{output_dir}/{filename}"
 
         try:
