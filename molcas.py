@@ -4,6 +4,7 @@
   config['mol name'] = string()
   config['xyz file'] = string()
   config['basis set'] = string()
+  config['functional'] = string()
   config['active space'] = [(int(num_electrons), int(num_orbitals)]
   config['symm a1'] = int()
   config['symm b2'] = int()
@@ -39,7 +40,7 @@ class MolcasInputGenerator:
 
     def gen_input_dft(self) -> str:
         """Generates Molcas input DFT."""
-        content = f"""> copy $CurrDir/../{self.config['xyz file']} $WorkDir/.
+        content = f"""
 
 &GATEway
   COORd = {self.config['xyz file']}
@@ -60,10 +61,8 @@ class MolcasInputGenerator:
 
     def gen_input_casscf(self) -> str:
         """Generates Molcas input CASSCF."""
-        a1 = self.config['symm a1']
-        b2 = self.config['symm b2']
-        b1 = self.config['symm b1']
-        a2 = self.config['symm a2']
+        a1, b1 = self.config['symm a1'], self.config['symm b1']
+        a2, b2 = self.config['symm a2'], self.config['symm b2']
         active_e, _ = self.config['active space']
         n_roots = self.config['num roots']
         content = f"""> copy $CurrDir/../{self.config['xyz file']} $WorkDir/.

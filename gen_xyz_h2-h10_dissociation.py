@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-""" ss """
+"""Generate XYZ files for H2-H10 dissociation."""
 
 import os
 

@@ -62,6 +62,51 @@ class InputUtils:
         })
         return config
 
+    @staticmethod
+    def get_fragment_files(xyz_dir: str) -> List[str]:
+        """Get list of fragment XYZ files."""
+        return sorted([f for f in os.listdir(xyz_dir)
+                       if f.startswith('frag') and f.endswith('.xyz')])
+
+    @staticmethod
+    def get_fragment_info(xyz_dir: str, fragments: List[str]) -> Dict:
+        """Get information about fragments."""
+        info = {}
+        atom_numbers = {
+            'H': 1, 'He': 2, 'Li': 3, 'Be': 4, 'B': 5, 'C': 6, 'N': 7, 'O': 8,
+            'F': 9, 'Ne': 10, 'Na': 11, 'Mg': 12, 'Al': 13, 'Si': 14, 'P': 15,
+            'S': 16, 'Cl': 17, 'Ar': 18, 'K': 19, 'Ca': 20
+        }
+
+        def count_electrons(xyz_file):
+            total_electrons = 0
+            with open(xyz_file, 'r', encoding="utf-8") as file:
+                lines = file.readlines()[2:]
+                for line in lines:
+                    parts = line.split()
+                    if len(parts) == 4:
+                        atom = parts[0]
+                        total_electrons += atom_numbers.get(atom, 0)
+            return total_electrons
+
+        for filename in ['tot.xyz'] + fragments:
+            file = os.path.join(xyz_dir, filename)
+            with open(file, 'r', encoding="utf-8") as f:
+                num_atoms = int(f.readline().strip())
+                second_line = f.readline().strip().lower()
+                method = 'dft' if 'method=' not in second_line else \
+                         second_line.split('method=')[1].split()[0]
+
+            num_electrons = count_electrons(file)
+
+            info[filename] = {
+                'atoms': num_atoms,
+                'method': method,
+                'electrons': num_electrons,
+            }
+
+        return info
+
 #  @staticmethod
 #  def get_cell_size(atoms: List[Tuple[str, float, float, float]],
 #                    padding: float = 5.0) -> Tuple[float, float, float]:

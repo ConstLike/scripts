@@ -1,11 +1,11 @@
 #!/usr/bin/python3
-
 """ Developed by Konstantin Komarov. """
 import argparse
 import os
 import sys
 from typing import Dict
 
+from cp2k_fat import CP2KInputGenerator
 from molcas import MolcasInputGenerator
 from utils import InputUtils
 
@@ -13,19 +13,32 @@ from utils import InputUtils
 def process_xyz_file(xyz_file: str, config: Dict) -> None:
     """Process a single XYZ file and generate Molcas input."""
     config = InputUtils.get_mol_info(xyz_file, config)
-    generator = MolcasInputGenerator(config)
     dir_name = os.path.dirname(os.path.abspath(xyz_file))
 
-    calc_type = config['calc type'].lower()
-    basis_set = config['basis set'].lower()
-    if calc_type in ['hf', 'dft']:
-        functional = config['functional'].lower()
-        subfolder = f"{basis_set}_{calc_type}_{functional}"
-    else:
+    if config['calc type'] == 'fat':
         a1, a2 = config['symm a1'], config['symm a2']
         b1, b2 = config['symm b1'], config['symm b2']
         active_e, active_o = config['active space']
-        subfolder = f"{basis_set}_{calc_type}_{a1}-{b1}-{a2}-{b2}_{active_e}-{active_o}"
+        generator = CP2KInputGenerator(config)
+        subfolder = (
+            f"{config['basis set'].lower()}_"
+            f"{config['functional'].lower()}_"
+            f"{config['pseudo'].lower()}_"
+            f"{config['kinetic'].lower()}_"
+            f"{a1}-{b2}-{b1}-{a2}_{active_e}-{active_o}"
+        )
+    else:
+        generator = MolcasInputGenerator(config)
+        calc_type = config['calc type'].lower()
+        basis_set = config['basis set'].lower()
+        if calc_type in ['hf', 'dft']:
+            functional = config['functional'].lower()
+            subfolder = f"{basis_set}_{calc_type}_{functional}"
+        else:
+            a1, a2 = config['symm a1'], config['symm a2']
+            b1, b2 = config['symm b1'], config['symm b2']
+            active_e, active_o = config['active space']
+            subfolder = f"{basis_set}_{calc_type}_{a1}-{b2}-{b1}-{a2}_{active_e}-{active_o}"
 
     output_dir = os.path.join(dir_name, subfolder)
     os.makedirs(output_dir, exist_ok=True)
@@ -39,6 +52,7 @@ def process_directory(directory: str, config: Dict) -> None:
             if xyz_file.endswith('.xyz'):
                 config['xyz file'] = xyz_file
                 xyz_path = os.path.join(root, xyz_file)
+                config.update({"xyz dir": xyz_path})
 
                 process_xyz_file(xyz_path, config)
 
@@ -71,6 +85,24 @@ def main_molcas(args, config):
         sys.exit(1)
 
 
+def main_cp2k_fat(args, config):
+    """ CP2K FAT generator."""
+
+    try:
+        if os.path.isfile(args.input_path):
+            if args.input_path.endswith('.xyz'):
+                config.update({"xyz dir": args.input_path})
+                process_xyz_file(args.input_path, config)
+            else:
+                print(f"Error: {args.input_path} is not an XYZ file.")
+        elif os.path.isdir(args.input_path):
+            process_directory(args.input_path, config)
+        else:
+            print(f"Error: {args.input_path} - not a valid file or directory.")
+    except (OSError, ValueError) as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
 def main():
     """ main. """
     args = parse_args()
@@ -81,41 +113,53 @@ def main():
             "functional": 'lda',
             "calc type": 'dft',
             "active space": [12, 14],
-            "symm a1": 6,
-            "symm b1": 4,
-            "symm a2": 3,
-            "symm b2": 1,
-            "num roots": 1
-        },
-        "CP2K_DFT": {
-            "basis set": 'DZVP-GTH',
-        },
-        "CP2K_DFT-in-DFT": {
-            "basis set": 'DZVP-GTH',
-        },
-        "CP2K_WF-in-DFT": {
-            "basis set": 'DZVP-GTH',
-            "wf basis set": 'ANO-S',
-            "calc type": 'caspt2',
-            "active space": [12, 12],
-            "symm a1": 7,
-            "symm b1": 1,
+            "symm a1": 8,
+            "symm b1": 2,
             "symm a2": 0,
             "symm b2": 4,
             "num roots": 1
         },
+        "CP2K WF-in-DFT": {
+            "calc type": "fat",
+            "basis set file": "GTH_BASIS_SETS",
+            "basis set": "DZVP-GTH",
+            "functional": 'LDA',
+            "kinetic": 'LDA_K_TF',
+            "pseudo file": 'GTH_POTENTIALS',
+            "pseudo": 'GTH-LDA',
+            "cell": [10.0, 10.0, 10.0],
+            "wf basis set": 'cc-pVDZ',
+            "wf functional": 'lda',
+            "active space": [4, 12],
+            'symm a1': 8,
+            'symm b2': 2,
+            'symm b1': 0,
+            'symm a2': 4,
+            "num roots": 1
+        }
     }
 
-    basis_sets = ['CC-PVTZ',]
-    calc_types = ['caspt2',]
-    functionals = ['lda',]
+#   basis_sets = ['CC-PVDZ',]
+#   calc_types = ['caspt2',]
+#   functionals = ['lda',]
+#   for basis in basis_sets:
+#       for calc_type in calc_types:
+#           for functional in functionals:
+#               config['OpenMolcas'].update({"basis set": basis})
+#               config['OpenMolcas'].update({"calc type": calc_type})
+#               config['OpenMolcas'].update({"functional": functional})
+#               main_molcas(args, config['OpenMolcas'])
+
+    basis_sets = ['DZVP-GTH',]
+    kinetics = ['LDA_K_TF',]
+    functionals = ['LDA',]
     for basis in basis_sets:
-        for calc_type in calc_types:
+        for kinetic in kinetics:
             for functional in functionals:
-                config['OpenMolcas'].update({"basis set": basis})
-                config['OpenMolcas'].update({"calc type": calc_type})
-                config['OpenMolcas'].update({"functional": functional})
-                main_molcas(args, config['OpenMolcas'])
+                config['CP2K WF-in-DFT'].update({"basis set": basis})
+                config['CP2K WF-in-DFT'].update({"kinetic": kinetic})
+                config['CP2K WF-in-DFT'].update({"functional": functional})
+                main_cp2k_fat(args, config['CP2K WF-in-DFT'])
 
 
 if __name__ == "__main__":
