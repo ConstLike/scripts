@@ -67,6 +67,8 @@ def process_xyz_file(xyz_file: str, config: Dict) -> None:
 def process_directory(directory: str, config: Dict) -> None:
     """Process all XYZ files in a directory and its subdirectories."""
     for root, _, files in os.walk(directory):
+        if not root.endswith('_xyz'):
+            continue
         for xyz_file in files:
             if xyz_file.endswith('.xyz'):
                 config['xyz file'] = xyz_file
@@ -140,7 +142,7 @@ def main():
             "num roots": 1
         },
         "CP2K WF-in-DFT": {
-            "calc type": "caspt2",
+            "calc type": "dft",
             "basis set file": "GTH_BASIS_SETS",
             "basis set": "DZVP-GTH",
             "functional": 'LDA',

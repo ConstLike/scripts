@@ -401,21 +401,21 @@ class CP2KInputGenerator:
             content = f"""#!/bin/sh
 pymolcas extern_{fragment_number}.inp | tee extern_{fragment_number}.out
 grep "1 Total energy" extern_{fragment_number}.out | awk '{{ print $8 }}' > extern_{fragment_number}.e
-python2 $MOLCAS/tools/grid2cube/grid2cube.py extern_{fragment_number}.{method}.lus extern_{fragment_number}_orig.cube
+python2 $MOLCAS/Tools/grid2cube/grid2cube.py extern_{fragment_number}.{method}.lus extern_{fragment_number}_orig.cube
 python3 roll_cubefile.py extern_{fragment_number}_orig.cube extern_{fragment_number}.cube
 """
         elif self.config['calc type'] == 'caspt2':
             content = f"""#!/bin/sh
 pymolcas extern_{fragment_number}.inp | tee extern_{fragment_number}.out
 grep "CASPT2 Root  1     Total energy" extern_{fragment_number}.out | awk '{{ print $7 }}' > extern_{fragment_number}.e
-python2 $MOLCAS/tools/grid2cube/grid2cube.py extern_{fragment_number}.{method}.lus extern_{fragment_number}_orig.cube
+python2 $MOLCAS/Tools/grid2cube/grid2cube.py extern_{fragment_number}.{method}.lus extern_{fragment_number}_orig.cube
 python3 roll_cubefile.py extern_{fragment_number}_orig.cube extern_{fragment_number}.cube
 """
         elif self.config['calc type'] == 'dft':
             content = f"""#!/bin/sh
 pymolcas extern_{fragment_number}.inp | tee extern_{fragment_number}.out
 grep "Total SCF energy" extern_{fragment_number}.out | awk '{{ print $5 }}' > extern_2.e
-python2 $MOLCAS/tools/grid2cube/grid2cube.py extern_{fragment_number}.{method}.lus extern_{fragment_number}_orig.cube
+python2 $MOLCAS/Tools/grid2cube/grid2cube.py extern_{fragment_number}.{method}.lus extern_{fragment_number}_orig.cube
 python3 roll_cubefile.py extern_{fragment_number}_orig.cube extern_{fragment_number}.cube
 """
         return content
