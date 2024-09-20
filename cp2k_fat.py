@@ -124,7 +124,7 @@ class CP2KInputGenerator:
     &END CELL
     &TOPOLOGY
       COORD_FILE_FORMAT XYZ
-      COORD_FILE_NAME {self.config['mol name']}_xyz/tot.xyz
+      COORD_FILE_NAME ../{self.config['mol name']}_xyz/tot.xyz
     &END TOPOLOGY
   &END SUBSYS
 &END FORCE_EVAL
@@ -180,7 +180,7 @@ class CP2KInputGenerator:
     &END KIND
     &TOPOLOGY
       COORD_FILE_FORMAT XYZ
-      COORD_FILE_NAME {self.config['mol name']}_xyz/tot.xyz
+      COORD_FILE_NAME ../{self.config['mol name']}_xyz/tot.xyz
     &END TOPOLOGY
   &END SUBSYS
   &PRINT
@@ -222,7 +222,7 @@ class CP2KInputGenerator:
         STRIDE 1 1 1
       &END E_DENSITY_CUBE
     &END PRINT
-  &END SCF
+  &END DFT
   &SUBSYS
     &CELL
       ABC {cell[0]:.2f} {cell[1]:.2f} {cell[2]:.2f}
@@ -233,7 +233,7 @@ class CP2KInputGenerator:
     &END KIND
     &TOPOLOGY
       COORD_FILE_FORMAT XYZ
-      COORD_FILE_NAME {self.config['mol name']}_xyz/{filename}
+      COORD_FILE_NAME ../{self.config['mol name']}_xyz/{filename}
     &END TOPOLOGY
   &END SUBSYS
 &END FORCE_EVAL
@@ -291,8 +291,12 @@ class CP2KInputGenerator:
   'mltpl  1' 3
 
 """
-        content += """&GRID_it
-  FILE=rasscf
+        content += """
+&CASPt2
+  PROP
+
+&GRID_it
+  NAME=caspt2
   NPOInts=107 107 107
   GORI
   -9.3611625 -9.3611625 -9.3611625
@@ -300,17 +304,15 @@ class CP2KInputGenerator:
   0.0 18.7223250 0.0
   0.0 0.0 18.7223250
 """
-        # content += """&CASPt2
-        #   PROP
-        # """
         return content
 
     def _generate_molcas_script(self, fragment_number: str) -> str:
         """Generate Molcas run script for a WF fragment."""
         return f"""#!/bin/sh
 pymolcas extern_{fragment_number}.inp | tee extern_{fragment_number}.out
-grep "1 Total energy" extern_{fragment_number}.out | awk '{{ print $8 }}' > extern_{fragment_number}.e
-python2 $MOLCAS/Tools/grid2cube/grid2cube.py extern_{fragment_number}.rasscf.lus extern_{fragment_number}_orig.cube
+#grep "1 Total energy" extern_{fragment_number}.out | awk '{{ print $8 }}' > extern_{fragment_number}.e
+grep "CASPT2 Root  1     Total energy" extern_{fragment_number}.out | awk '{{ print $7 }}' > extern_{fragment_number}.e
+python2 $MOLCAS/Tools/grid2cube/grid2cube.py extern_{fragment_number}.caspt2.lus extern_{fragment_number}_orig.cube
 python3 roll_cubefile.py extern_{fragment_number}_orig.cube extern_{fragment_number}.cube
 """
 

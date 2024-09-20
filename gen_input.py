@@ -13,7 +13,9 @@ from utils import InputUtils
 def process_xyz_file(xyz_file: str, config: Dict) -> None:
     """Process a single XYZ file and generate Molcas input."""
     config = InputUtils.get_mol_info(xyz_file, config)
+    xyz_dir = os.path.dirname(os.path.abspath(xyz_file))
     dir_name = os.path.dirname(os.path.abspath(xyz_file))
+    config['mol name'] = os.path.basename(xyz_dir).split('_')[0]
 
     if config['calc type'] == 'fat':
         a1, a2 = config['symm a1'], config['symm a2']
@@ -27,6 +29,8 @@ def process_xyz_file(xyz_file: str, config: Dict) -> None:
             f"{config['kinetic'].lower()}_"
             f"{a1}-{b2}-{b1}-{a2}_{active_e}-{active_o}"
         )
+        output_dir = os.path.join(os.path.dirname(dir_name), subfolder)
+
     else:
         generator = MolcasInputGenerator(config)
         calc_type = config['calc type'].lower()
@@ -39,8 +43,8 @@ def process_xyz_file(xyz_file: str, config: Dict) -> None:
             b1, b2 = config['symm b1'], config['symm b2']
             active_e, active_o = config['active space']
             subfolder = f"{basis_set}_{calc_type}_{a1}-{b2}-{b1}-{a2}_{active_e}-{active_o}"
+        output_dir = os.path.join(dir_name, subfolder)
 
-    output_dir = os.path.join(dir_name, subfolder)
     os.makedirs(output_dir, exist_ok=True)
     generator.save_input(output_dir)
 
@@ -52,7 +56,7 @@ def process_directory(directory: str, config: Dict) -> None:
             if xyz_file.endswith('.xyz'):
                 config['xyz file'] = xyz_file
                 xyz_path = os.path.join(root, xyz_file)
-                config.update({"xyz dir": xyz_path})
+                config.update({"xyz dir": os.path.dirname(xyz_path)})
 
                 process_xyz_file(xyz_path, config)
 
@@ -131,10 +135,10 @@ def main():
             "wf basis set": 'cc-pVDZ',
             "wf functional": 'lda',
             "active space": [4, 12],
-            'symm a1': 8,
-            'symm b2': 2,
-            'symm b1': 0,
-            'symm a2': 4,
+            'symm a1': 7,
+            'symm b1': 5,
+            'symm b2': 0,
+            'symm a2': 0,
             "num roots": 1
         }
     }
