@@ -1,6 +1,5 @@
 """ CP2K input class.
 @input: config dictionary, containing:
-  config['calc type'] = string(dft|casscf|caspt2)
   config['mol name'] = string()
   config['xyz dir'] = string()
   config['cell'] = [float(), float(), float()]
@@ -250,8 +249,7 @@ class CP2KInputGenerator:
         n_roots = self.config['num roots']
 
         # > copy $CurrDir/extern_{fragment_number}.ScfOrb $WorkDir/INPORB
-        if self.config['calc type'] == "caspt2":
-            content = f"""> copy $CurrDir/vemb_{fragment_number}.dat $WorkDir
+        content = f"""> copy $CurrDir/vemb_{fragment_number}.dat $WorkDir
 > copy $CurrDir/../{self.config['mol name']}_xyz/frag{fragment_number}.xyz $WorkDir
 
 &GATEway
@@ -279,8 +277,8 @@ class CP2KInputGenerator:
   CIRoot = {n_roots} {n_roots} 1
   LevShift = 0.5
 """
-            if n_roots > 1:
-                content += f"""
+        if n_roots > 1:
+            content += f"""
 &RASSi
   NROFjobiphs = 1 {n_roots}
   {' '.join(str(i) for i in range(1, n_roots + 1))}
@@ -293,97 +291,12 @@ class CP2KInputGenerator:
   'mltpl  1' 3
 
 """
-            content += f"""
+        content += """
 &CASPt2
   PROP
 
 &GRID_it
-  NAME={self.config['calc type']}
-  NPOInts=107 107 107
-  GORI
-  -9.3611625 -9.3611625 -9.3611625
-  18.7223250 0.0 0.0
-  0.0 18.7223250 0.0
-  0.0 0.0 18.7223250
-"""
-        elif self.config['calc type'] == "casscf":
-            content = f"""> copy $CurrDir/vemb_{fragment_number}.dat $WorkDir
-> copy $CurrDir/../{self.config['mol name']}_xyz/frag{fragment_number}.xyz $WorkDir
-
-&GATEway
-  TITLe=extern_{fragment_number}
-  COORd=frag{fragment_number}.xyz
-  BASIs={self.config['wf basis set']}
-
-&SEWArd
-  EMBEdding
-    EMBInput=vemb_{fragment_number}.dat
-  ENDEmbedding
-
-&SCF
-  CHARge = 0
-  SPIN = 1
-
-&RASScf
-  Spin = 1
-  Symmetry = 1
-  nActEl = {active_e} 0 0
-  Inactive =  0 0 0 0
-  RAS1 = 0 0 0 0
-  RAS2 = {a1} {b1} {a2} {b2}
-  RAS3 = 0 0 0 0
-  CIRoot = {n_roots} {n_roots} 1
-  LevShift = 0.5
-"""
-            if n_roots > 1:
-                content += f"""
-&RASSi
-  NROFjobiphs = 1 {n_roots}
-  {' '.join(str(i) for i in range(1, n_roots + 1))}
-  XVES
-  MEES
-  PROP
-  3
-  'mltpl  1' 1
-  'mltpl  1' 2
-  'mltpl  1' 3
-
-"""
-            content += f"""
-&GRID_it
-  NAME={self.config['calc type']}
-  NPOInts=107 107 107
-  GORI
-  -9.3611625 -9.3611625 -9.3611625
-  18.7223250 0.0 0.0
-  0.0 18.7223250 0.0
-  0.0 0.0 18.7223250
-"""
-        elif self.config['calc type'] == "dft":
-            content = f"""> copy $CurrDir/vemb_{fragment_number}.dat $WorkDir
-> copy $CurrDir/../{self.config['mol name']}_xyz/frag{fragment_number}.xyz $WorkDir
-
-&GATEway
-  TITLe=extern_{fragment_number}
-  COORd=frag{fragment_number}.xyz
-  BASIs={self.config['wf basis set']}
-
-&SEWArd
-  EMBEdding
-    EMBInput=vemb_{fragment_number}.dat
-  ENDEmbedding
-
-&SCF
-  CHARge = 0
-  SPIN = 1
-
-&SCF
-  CHARge = 0
-  SPIN = 1
-  KSDFT = {self.config['wf functional']}
-
-&GRID_it
-  NAME={self.config['calc type']}
+  NAME=caspt2
   NPOInts=107 107 107
   GORI
   -9.3611625 -9.3611625 -9.3611625
@@ -394,31 +307,14 @@ class CP2KInputGenerator:
         return content
 
     def _generate_molcas_script(self, fragment_number: str) -> str:
-        """generate molcas run script for a wf fragment."""
-        content = ''
-        method = self.config['calc type']
-        if self.config['calc type'] == 'casscf':
-            content = f"""#!/bin/sh
+        """Generate Molcas run script for a WF fragment."""
+        return f"""#!/bin/sh
 pymolcas extern_{fragment_number}.inp | tee extern_{fragment_number}.out
-grep "1 Total energy" extern_{fragment_number}.out | awk '{{ print $8 }}' > extern_{fragment_number}.e
-python2 $MOLCAS/tools/grid2cube/grid2cube.py extern_{fragment_number}.{method}.lus extern_{fragment_number}_orig.cube
-python3 roll_cubefile.py extern_{fragment_number}_orig.cube extern_{fragment_number}.cube
-"""
-        elif self.config['calc type'] == 'caspt2':
-            content = f"""#!/bin/sh
-pymolcas extern_{fragment_number}.inp | tee extern_{fragment_number}.out
+#grep "1 Total energy" extern_{fragment_number}.out | awk '{{ print $8 }}' > extern_{fragment_number}.e
 grep "CASPT2 Root  1     Total energy" extern_{fragment_number}.out | awk '{{ print $7 }}' > extern_{fragment_number}.e
-python2 $MOLCAS/tools/grid2cube/grid2cube.py extern_{fragment_number}.{method}.lus extern_{fragment_number}_orig.cube
+python2 $MOLCAS/Tools/grid2cube/grid2cube.py extern_{fragment_number}.caspt2.lus extern_{fragment_number}_orig.cube
 python3 roll_cubefile.py extern_{fragment_number}_orig.cube extern_{fragment_number}.cube
 """
-        elif self.config['calc type'] == 'dft':
-            content = f"""#!/bin/sh
-pymolcas extern_{fragment_number}.inp | tee extern_{fragment_number}.out
-grep "Total SCF energy" extern_{fragment_number}.out | awk '{{ print $5 }}' > extern_2.e
-python2 $MOLCAS/tools/grid2cube/grid2cube.py extern_{fragment_number}.{method}.lus extern_{fragment_number}_orig.cube
-python3 roll_cubefile.py extern_{fragment_number}_orig.cube extern_{fragment_number}.cube
-"""
-        return content
 
     def _generate_roll_cubefile_script(self) -> str:
         """Generate roll_cubefile.py script."""
@@ -437,7 +333,9 @@ with open(argv[2], "w") as f:
 
     def save_input(self, output_dir: str) -> None:
         """Save the generated input files."""
-        file_name = (f"{self.config['calc type']}-in-dft_{self.config['mol name']}_"
+        method = 'wf' if any(info['method'].lower() == 'wf'
+                             for info in self.config['frag info'].values()) else 'dft'
+        file_name = (f"{method}-in-dft_{self.config['mol name']}_"
                      f"{self.config['basis set'].lower()}_"
                      f"{self.config['functional'].lower()}_"
                      f"{self.config['pseudo'].lower()}")

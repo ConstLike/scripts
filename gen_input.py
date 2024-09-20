@@ -17,32 +17,17 @@ def process_xyz_file(xyz_file: str, config: Dict) -> None:
     dir_name = os.path.dirname(os.path.abspath(xyz_file))
     config['mol name'] = os.path.basename(xyz_dir).split('_')[0]
 
-    if config['calc type'] == 'caspt2':
+    if config['calc type'] == 'fat':
         a1, a2 = config['symm a1'], config['symm a2']
         b1, b2 = config['symm b1'], config['symm b2']
         active_e, active_o = config['active space']
         generator = CP2KInputGenerator(config)
         subfolder = (
-            f"{config['calc type']}-in-dft_"
             f"{config['basis set'].lower()}_"
             f"{config['functional'].lower()}_"
             f"{config['pseudo'].lower()}_"
             f"{config['kinetic'].lower()}_"
-            f"{config['wf basis set'].lower()}_"
             f"{a1}-{b2}-{b1}-{a2}_{active_e}-{active_o}"
-        )
-        output_dir = os.path.join(os.path.dirname(dir_name), subfolder)
-
-    elif config['calc type'] == 'dft':
-        generator = CP2KInputGenerator(config)
-        subfolder = (
-            f"{config['calc type']}-in-dft_"
-            f"{config['basis set'].lower()}_"
-            f"{config['functional'].lower()}_"
-            f"{config['pseudo'].lower()}_"
-            f"{config['kinetic'].lower()}_"
-            f"{config['wf basis set'].lower()}_"
-            f"wf-{config['wf functional']}"
         )
         output_dir = os.path.join(os.path.dirname(dir_name), subfolder)
 
@@ -122,7 +107,6 @@ def main_cp2k_fat(args, config):
         print(f"Error: {e}")
         sys.exit(1)
 
-
 def main():
     """ main. """
     args = parse_args()
@@ -140,7 +124,7 @@ def main():
             "num roots": 1
         },
         "CP2K WF-in-DFT": {
-            "calc type": "caspt2",
+            "calc type": "fat",
             "basis set file": "GTH_BASIS_SETS",
             "basis set": "DZVP-GTH",
             "functional": 'LDA',
