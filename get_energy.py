@@ -1,12 +1,11 @@
 #!/usr/bin/python3
-
 """ Developed by Konstantin Komarov. """
 
 import argparse
 import json
 import os
 import re
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 
 class ResultExtractor:
@@ -36,6 +35,83 @@ class ResultExtractor:
         match = re.search(patterns[calc_type], log_content)
         return float(match.group(1)) if match else None
 
+    def find_molcas_log(self, directory: str) -> Optional[str]:
+        """Find Molcas log file in the given directory."""
+        for file in os.listdir(directory):
+            if file.startswith("extern") and file.endswith(".out"):
+                return os.path.join(directory, file)
+        return None
+
+    def extract_scf_data(self, log_content: str) -> List[Dict[str, float]]:
+        """Extract SCF data for FAT calculations."""
+        scf_data = []
+        pattern = r'FAT\|\s+(\d+),\s+(\d+),\s+(\d+),\s+(\d+),\s+([-\d.]+),\s+([-\d.]+),\s+([-\d.]+),\s+([-\d.]+),\s+([-\d.]+),\s+([-\d.]+),\s+([-\d.]+),\s+([-\d.]+),\s+([-\d.]+),\s+([-\d.]+)'
+        matches = re.finditer(pattern, log_content)
+        for match in matches:
+            scf_data.append({
+                'i_iter': int(match.group(1)),
+                'n_iter': int(match.group(2)),
+                'i_frag': int(match.group(3)),
+                'n_frag': int(match.group(4)),
+                'self': float(match.group(5)),
+                'emb': float(match.group(6)),
+                'kin_ref': float(match.group(7)),
+                'kin_frag': float(match.group(8)),
+                'xc_ref': float(match.group(9)),
+                'xc_frag': float(match.group(10)),
+                'ee': float(match.group(11)),
+                'ne': float(match.group(12)),
+                'nn': float(match.group(13)),
+                'tot': float(match.group(14))
+            })
+        return scf_data
+
+    def extract_energy_contributions(self, log_content: str) -> Dict[str, Union[float, List[float]]]:
+        """Extract energy contributions for FAT calculations."""
+        contributions: Dict[str, Union[float, List[float]]] = {}
+        patterns = {
+            'self energy': r'FAT\| self energy fragment\s+(\d+):\s+([-\d.]+)',
+            'emb energy': r'FAT\| emb energy fragment\s+(\d+):\s+([-\d.]+)',
+            'kin energy': r'FAT\| kin energy (reference\s*|fragment\s+\d+):\s+([-\d.]+)',
+            'xc energy': r'FAT\| xc energy (reference\s*|fragment\s+\d+):\s+([-\d.]+)',
+            'ee energy': r'FAT\| ee energy fragments\s+(\d+)\s+(\d+):\s+([-\d.]+)',
+            'ne energy': r'FAT\| ne energy fragments\s+(\d+)\s+(\d+):\s+([-\d.]+)',
+            'nn energy': r'FAT\| nn energy fragments\s+(\d+)\s+(\d+):\s+([-\d.]+)'
+        }
+
+        for energy_type, pattern in patterns.items():
+            matches = re.finditer(pattern, log_content)
+            for match in matches:
+                if energy_type in ['self energy', 'emb energy']:
+                    key = f"{energy_type} frag {match.group(1)}"
+                    contributions[key] = float(match.group(2))
+                elif energy_type in ['kin energy', 'xc energy']:
+                    print(match)
+                    key = f"{energy_type} fat"
+                    if key not in contributions:
+                        contributions[key] = []
+                    if match.group(1) == 'reference':
+                        contributions[key].insert(0, float(match.group(2)))
+                    else:
+                        contributions[key].append(float(match.group(2)))
+                else:
+                    key = f"{energy_type} frag {match.group(1)}"
+                    contributions[key] = float(match.group(3))
+
+        # Calculate NAD energies
+        for energy_type in ['kin energy', 'xc energy']:
+            fat_key = f"{energy_type} fat"
+            if fat_key in contributions:
+                fat_values = contributions[fat_key]
+                print(fat_values)
+                if isinstance(fat_values, list) and len(fat_values) == 3:
+                    nad_key = f"{energy_type} nad"
+                    contributions[nad_key] = (
+                        fat_values[0] - sum(fat_values[1:])
+                    )
+
+        return contributions
+
     def extract_energy_cp2k(self, log_content: str) -> Optional[float]:
         """Extract energy value for a specific calculation type."""
         pattern = r'ENERGY\| Total FORCE_EVAL \( FAT \) energy \[a\.u\.\]:\s+([-\d.]+)'
@@ -55,15 +131,31 @@ class ResultExtractor:
                 result[f"total energy {calc_type}"] = energy
         return result
 
-    def process_cp2k_log(self, log_file_path: str) -> Dict[str, Optional[float]]:
-        result: Dict[str, Union[float, str, None]] = {
+    def process_cp2k_log(self, log_file_path: str) -> Dict[str, Any]:
+        """ x """
+        result: Dict[str, Any] = {
             "logfile": os.path.abspath(log_file_path)
         }
         with open(log_file_path, 'r', encoding="utf-8") as f:
             log_content = f.read()
+
         energy = self.extract_energy_cp2k(log_content)
         if energy is not None:
             result["total energy fat"] = energy
+
+        result["scf data"] = self.extract_scf_data(log_content)
+        result.update(self.extract_energy_contributions(log_content))
+
+        # Process Molcas log file if it exists
+        molcas_log_path = self.find_molcas_log(os.path.dirname(log_file_path))
+        if molcas_log_path:
+            with open(molcas_log_path, 'r', encoding="utf-8") as f:
+                molcas_log_content = f.read()
+            for calc_type in ['hf', 'dft', 'casscf', 'caspt2']:
+                energy = self.extract_energy_molcas(molcas_log_content, calc_type)
+                if energy is not None:
+                    result[f"wf total energy {calc_type}"] = energy
+
         return result
 
     def process_directory(self, root_dir: str):
