@@ -21,7 +21,6 @@ class ResultExtractor:
     def extract_distance(self, xyz_content: str) -> Optional[float]:
         """Extract distance value in Bohr from XYZ file content."""
         match = re.search(r'= ([\d.]+) Bboohhrr', xyz_content)
-        print(match)
         return float(match.group(1)) if match else None
 
     def extract_energy_molcas(self, log_content: str, calc_type: str) -> Optional[float]:
@@ -66,6 +65,17 @@ class ResultExtractor:
             })
         return scf_data
 
+    def extract_fragment_energies(self, scf_data: List[Dict[str, float]]) -> Dict[str, float]:
+        """
+        Extracts fragment energies from the latest iteration of the FAT SCF.
+        """
+        last_iteration = max(scf_data, key=lambda x: x['i_iter'])
+        frag_energies = {}
+        for entry in scf_data:
+            if entry['i_iter'] == last_iteration['i_iter']:
+                frag_energies[f"tot energy frag {entry['i_frag']}"] = entry['tot']
+        return frag_energies
+
     def extract_energy_contributions(self, log_content: str) -> Dict[str, Union[float, List[float]]]:
         """Extract energy contributions for FAT calculations."""
         contributions: Dict[str, Union[float, List[float]]] = {}
@@ -86,7 +96,6 @@ class ResultExtractor:
                     key = f"{energy_type} frag {match.group(1)}"
                     contributions[key] = float(match.group(2))
                 elif energy_type in ['kin energy', 'xc energy']:
-                    print(match)
                     key = f"{energy_type} fat"
                     if key not in contributions:
                         contributions[key] = []
@@ -103,7 +112,6 @@ class ResultExtractor:
             fat_key = f"{energy_type} fat"
             if fat_key in contributions:
                 fat_values = contributions[fat_key]
-                print(fat_values)
                 if isinstance(fat_values, list) and len(fat_values) == 3:
                     nad_key = f"{energy_type} nad"
                     contributions[nad_key] = (
@@ -132,7 +140,7 @@ class ResultExtractor:
         return result
 
     def process_cp2k_log(self, log_file_path: str) -> Dict[str, Any]:
-        """ x """
+        """Processes CP2K log file and extracts data."""
         result: Dict[str, Any] = {
             "logfile": os.path.abspath(log_file_path)
         }
@@ -143,8 +151,10 @@ class ResultExtractor:
         if energy is not None:
             result["total energy fat"] = energy
 
-        result["scf data"] = self.extract_scf_data(log_content)
+        scf_data = self.extract_scf_data(log_content)
+        result["scf data"] = scf_data
         result.update(self.extract_energy_contributions(log_content))
+        result.update(self.extract_fragment_energies(scf_data))
 
         # Process Molcas log file if it exists
         molcas_log_path = self.find_molcas_log(os.path.dirname(log_file_path))
@@ -158,35 +168,8 @@ class ResultExtractor:
 
         return result
 
-    def process_directory(self, root_dir: str):
-        """Process the directory structure to extract calculation results."""
-        for dirpath, dirnames, filenames in os.walk(root_dir):
-            xyz_file = next((f for f in filenames if f.endswith('.xyz')), None)
-            if xyz_file:
-                with open(os.path.join(dirpath, xyz_file),
-                          'r',
-                          encoding="utf-8") as f:
-                    xyz_content = f.read()
-                distance = self.extract_distance(xyz_content)
-                mol_name = os.path.splitext(xyz_file)[0]
-                mol_name = '-'.join(mol_name.split('-')[:-1])
-
-                for subdir in dirnames:
-                    subfolder_path = os.path.join(dirpath, subdir)
-                    log_files = [f for f in os.listdir(subfolder_path)
-                                 if f.endswith('.log')]
-
-                    for log_file in log_files:
-                        log_file_path = os.path.join(subfolder_path, log_file)
-                        result = self.process_molcas_log(log_file_path)
-                        result["distance"] = distance
-
-                        key = f"{mol_name}_{subdir}"
-                        if key not in self.results["calculations"]:
-                            self.results["calculations"][key] = []
-                        self.results["calculations"][key].append(result)
-
     def process_cp2k_directory(self, root_dir: str):
+        """Processes a directory with CP2K calculations."""
         for dirpath, _, filenames in os.walk(root_dir):
             xyz_dir = os.path.join(dirpath, f"{os.path.basename(dirpath)}_xyz")
             if os.path.exists(xyz_dir):
