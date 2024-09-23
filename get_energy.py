@@ -168,14 +168,19 @@ class ResultExtractor:
 
         return result
 
-    def process_cp2k_directory(self, root_dir: str):
+    def process_cp2k_fat_directory(self, root_dir: str):
         """Processes a directory with CP2K calculations."""
         for dirpath, _, filenames in os.walk(root_dir):
             xyz_dir = os.path.join(dirpath, f"{os.path.basename(dirpath)}_xyz")
             if os.path.exists(xyz_dir):
-                xyz_file = next((f for f in os.listdir(xyz_dir) if f == 'tot.xyz'), None)
+                xyz_file = next(
+                    (f for f in os.listdir(xyz_dir) if f == 'tot.xyz'),
+                    None
+                )
                 if xyz_file:
-                    with open(os.path.join(xyz_dir, xyz_file), 'r', encoding="utf-8") as f:
+                    with open(os.path.join(xyz_dir, xyz_file),
+                              'r',
+                              encoding="utf-8") as f:
                         xyz_content = f.read()
                     distance = self.extract_distance(xyz_content)
 
@@ -198,9 +203,20 @@ class ResultExtractor:
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Extract energy information from log files.")
-    parser.add_argument("input", help="Input directory with log files or subdirectories")
-    parser.add_argument("--type", choices=['molcas', 'cp2k'], required=True, help="Type of calculation")
+    """ args parser."""
+    parser = argparse.ArgumentParser(
+        description="Extract energy information from log files."
+    )
+    parser.add_argument(
+        "input",
+        help="Input directory with log files or subdirectories"
+    )
+    parser.add_argument(
+        "--type",
+        choices=['molcas', 'fat', 'cp2k'],
+        required=True,
+        help="Type of calculation"
+    )
     return parser.parse_args()
 
 
@@ -220,6 +236,8 @@ def main():
 
     if args.type == 'molcas':
         extractor.process_molcas_directory(config["root_dir"])
+    elif args.type == 'fat':
+        extractor.process_cp2k_fat_directory(config["root_dir"])
     elif args.type == 'cp2k':
         extractor.process_cp2k_directory(config["root_dir"])
 
