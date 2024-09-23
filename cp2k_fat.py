@@ -26,7 +26,7 @@ from typing import Dict, List
 from utils import InputUtils
 
 
-class CP2KInputGenerator:
+class CP2KFATInputGenerator:
     """Generates CP2K input files for FAT calculations."""
 
     def __init__(self, config: Dict):

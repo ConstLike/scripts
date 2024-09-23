@@ -1,28 +1,31 @@
-#!/usr/bin/env python3
 
+#!/usr/bin/env python3
 import argparse
 import os
+import sys
 from typing import Dict, List
 
 
 class CP2KInputGenerator:
     def __init__(self, config: Dict):
+        self.config = config
         self.xyz_dir = config["xyz dir"]
-        self.basis_set = config["cp2k"]["basis set"]
-        self.basis_path = config["cp2k"]["basis path"]
-        self.dft_functional = config["cp2k"]["functional"]
-        self.pseudopotential = config["cp2k"]["pseudo"]
-        self.pseudo_path = config["cp2k"]["pseudo path"]
-        self.cutoff = config["cp2k"]["cutoff"]
-        self.rel_cutoff = config["cp2k"]["rel cutoff"]
+        self.basis_set = config["basis set"]
+        self.basis_path = config["basis set file"]
+        self.dft_functional = config["functional"]
+        self.pseudopotential = config["pseudo"]
+        self.pseudo_path = config["pseudo file"]
+        self.cutoff = config["cutoff"]
+        self.rel_cutoff = config["rel cutoff"]
         self.cell_size = config["cell"]
         self.do_hf = False
         if self.dft_functional.lower() == "none":
             self.do_hf = True
 
-    def generate_input(self, molecule_name: str, xyz_filename: str) -> str:
+    def generate_input(self) -> str:
+        """ xx """
         input_content = f"""&GLOBAL
-  PROJECT {molecule_name}
+  PROJECT {self.config['mol name']}
   RUN_TYPE ENERGY_FORCE
   PRINT_LEVEL MEDIUM
 &END GLOBAL
@@ -98,7 +101,7 @@ class CP2KInputGenerator:
       ABC {self.cell_size[0]} {self.cell_size[1]} {self.cell_size[2]}
     &END CELL
     &TOPOLOGY
-      COORD_FILE_NAME {xyz_filename}
+      COORD_FILE_NAME ../{os.path.basename(self.config['xyz dir'])}/tot.xyz
       COORD_FILE_FORMAT XYZ
     &END TOPOLOGY
     &KIND DEFAULT
@@ -118,6 +121,27 @@ class CP2KInputGenerator:
 &END FORCE_EVAL
 """
         return input_content
+
+    def save_input(self, output_dir: str) -> None:
+        """Saves the generated input to a file."""
+        file_name = (f"{self.config['calc type']}_{self.config['mol name']}_"
+                     f"{self.config['basis set'].lower()}_"
+                     f"{self.config['functional'].lower()}_"
+                     f"{self.config['pseudo'].lower()}")
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Save CP2K input
+        cp2k_filename = f"{file_name}.inp"
+
+        try:
+            with open(os.path.join(output_dir, cp2k_filename),
+                      'w',
+                      encoding="utf-8") as f:
+                f.write(self.generate_input())
+            print(f"Generated: {os.path.join(output_dir, cp2k_filename)}")
+        except IOError as e:
+            print(f"Error writing input file: {e}")
+            sys.exit(1)
 
 
 def process_input(input_path: str, config: Dict):
