@@ -34,6 +34,23 @@ class ResultExtractor:
         match = re.search(patterns[calc_type], log_content)
         return float(match.group(1)) if match else None
 
+    def extract_cp2k_energies(self, log_content: str) -> Dict[str, float]:
+        """Extract energy components from CP2K log content."""
+        energy_patterns = {
+            "overlap energy": r"Overlap energy of the core charge distribution:\s+([-\d.]+)",
+            "self energy": r"Self energy of the core charge distribution:\s+([-\d.]+)",
+            "core hamiltonian energy": r"Core Hamiltonian energy:\s+([-\d.]+)",
+            "hartree energy": r"Hartree energy:\s+([-\d.]+)",
+            "exchange correlation energy": r"Exchange-correlation energy:\s+([-\d.]+)",
+            "total energy": r"Total energy:\s+([-\d.]+)",
+        }
+        energies = {}
+        for key, pattern in energy_patterns.items():
+            match = re.search(pattern, log_content)
+            if match:
+                energies[key] = float(match.group(1))
+        return energies
+
     def find_molcas_log(self, directory: str) -> Optional[str]:
         """Find Molcas log file in the given directory."""
         for file in os.listdir(directory):
@@ -139,8 +156,8 @@ class ResultExtractor:
                 result[f"total energy {calc_type}"] = energy
         return result
 
-    def process_cp2k_log(self, log_file_path: str) -> Dict[str, Any]:
-        """Processes CP2K log file and extracts data."""
+    def process_cp2k_fat_log(self, log_file_path: str) -> Dict[str, Any]:
+        """Processes CP2K FAT log file and extracts data."""
         result: Dict[str, Any] = {
             "logfile": os.path.abspath(log_file_path)
         }
@@ -168,9 +185,35 @@ class ResultExtractor:
 
         return result
 
-    def process_cp2k_fat_directory(self, root_dir: str):
+    def process_cp2k_log(self, log_file_path: str) -> Dict[str, Any]:
+        """Processes CP2K log file and extracts energy data."""
+        result: Dict[str, Any] = {
+            "logfile": os.path.abspath(log_file_path)
+        }
+        with open(log_file_path, 'r', encoding="utf-8") as f:
+            log_content = f.read()
+
+        energy_patterns = {
+            "overlap energy": r"Overlap energy of the core charge distribution:\s+([-\d.]+)",
+            "self energy": r"Self energy of the core charge distribution:\s+([-\d.]+)",
+            "core hamiltonian energy": r"Core Hamiltonian energy:\s+([-\d.]+)",
+            "hartree energy": r"Hartree energy:\s+([-\d.]+)",
+            "exchange correlation energy": r"Exchange-correlation energy:\s+([-\d.]+)",
+            "total energy": r"Total energy:\s+([-\d.]+)",
+        }
+
+        for key, pattern in energy_patterns.items():
+            match = re.search(pattern, log_content)
+            if match:
+                result[key] = float(match.group(1))
+
+        return result
+
+    def process_cp2k_fat_directory(self, config: Dict):
         """Processes a directory with CP2K calculations."""
-        for dirpath, _, filenames in os.walk(root_dir):
+        root_dir = config['root dir']
+#       spec = config['spec']
+        for dirpath, _, _ in os.walk(root_dir):
             xyz_dir = os.path.join(dirpath, f"{os.path.basename(dirpath)}_xyz")
             if os.path.exists(xyz_dir):
                 xyz_file = next(
@@ -186,6 +229,40 @@ class ResultExtractor:
 
                     for root, _, files in os.walk(dirpath):
                         log_files = [f for f in files if f.endswith('.log')]
+                        log_files = [f for f in files if (f.endswith('.log') and not f.startswith("dft1_"))]
+                        for log_file in log_files:
+                            log_file_path = os.path.join(root, log_file)
+                            result = self.process_cp2k_fat_log(log_file_path)
+                            result["distance"] = distance
+
+                            calc_type = os.path.basename(root)
+                            if calc_type not in self.results["calculations"]:
+                                self.results["calculations"][calc_type] = []
+                            self.results["calculations"][calc_type].append(result)
+
+    def process_cp2k_directory(self, config: Dict):
+        """Processes a directory with CP2K calculations."""
+        root_dir = config['root dir']
+        spec = config['spec']
+        for dirpath, _, filenames in os.walk(root_dir):
+            base_dir = os.path.basename(dirpath)
+            xyz_dir = os.path.join(dirpath, f"{base_dir}_xyz")
+            if os.path.exists(xyz_dir):
+                xyz_file = next(
+                    (f for f in os.listdir(xyz_dir) if f == 'tot.xyz'),
+                    None
+                )
+                if xyz_file:
+                    with open(os.path.join(xyz_dir, xyz_file),
+                              'r',
+                              encoding="utf-8") as f:
+                        xyz_content = f.read()
+                    distance = self.extract_distance(xyz_content)
+
+                    for root, _, files in os.walk(dirpath):
+                        log_files = [f for f in files if f.endswith('.log')]
+                        if spec is not None:
+                            log_files = [f for f in files if (f.endswith('.log') and f.startswith(spec))]
                         for log_file in log_files:
                             log_file_path = os.path.join(root, log_file)
                             result = self.process_cp2k_log(log_file_path)
@@ -195,6 +272,7 @@ class ResultExtractor:
                             if calc_type not in self.results["calculations"]:
                                 self.results["calculations"][calc_type] = []
                             self.results["calculations"][calc_type].append(result)
+
 
     def save_results(self, output_file: str):
         """Save extracted results to a JSON file."""
@@ -215,7 +293,13 @@ def parse_args():
         "--type",
         choices=['molcas', 'fat', 'cp2k'],
         required=True,
-        help="Type of calculation"
+        help="type of calculation"
+    )
+    parser.add_argument(
+        "--spec",
+        type=str,
+        default=None,
+        help="specific folder of calculation"
     )
     return parser.parse_args()
 
@@ -229,19 +313,20 @@ def main():
         return
 
     config = {
-        "root_dir": args.input,
-        "output_file": f"{args.type}_results.json"
+        "root dir": args.input,
+        "output file": f"{args.type}_results.json",
+        "spec": args.spec
     }
     extractor = ResultExtractor(config)
 
     if args.type == 'molcas':
-        extractor.process_molcas_directory(config["root_dir"])
+        extractor.process_molcas_directory(config["root dir"])
     elif args.type == 'fat':
-        extractor.process_cp2k_fat_directory(config["root_dir"])
+        extractor.process_cp2k_fat_directory(config)
     elif args.type == 'cp2k':
-        extractor.process_cp2k_directory(config["root_dir"])
+        extractor.process_cp2k_directory(config)
 
-    extractor.save_results(config["output_file"])
+    extractor.save_results(config["output file"])
 
 
 if __name__ == "__main__":
