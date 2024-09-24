@@ -82,7 +82,7 @@ class ResultExtractor:
             })
         return scf_data
 
-    def extract_fragment_energies(self, scf_data: List[Dict[str, float]]) -> Dict[str, float]:
+    def extract_fragment_energies_after_scf(self, scf_data: List[Dict[str, float]]) -> Dict[str, float]:
         """
         Extracts fragment energies from the latest iteration of the FAT SCF.
         """
@@ -93,7 +93,7 @@ class ResultExtractor:
                 frag_energies[f"tot energy frag {entry['i_frag']}"] = entry['tot']
         return frag_energies
 
-    def extract_energy_contributions(self, log_content: str) -> Dict[str, Union[float, List[float]]]:
+    def extract_fat_energy_contributions(self, log_content: str) -> Dict[str, Union[float, List[float]]]:
         """Extract energy contributions for FAT calculations."""
         contributions: Dict[str, Union[float, List[float]]] = {}
         patterns = {
@@ -166,12 +166,12 @@ class ResultExtractor:
 
         energy = self.extract_energy_cp2k(log_content)
         if energy is not None:
-            result["total energy fat"] = energy
+            result["fat total energy"] = energy
 
         scf_data = self.extract_scf_data(log_content)
-        result["scf data"] = scf_data
-        result.update(self.extract_energy_contributions(log_content))
-        result.update(self.extract_fragment_energies(scf_data))
+        result["fat scf data"] = scf_data
+        result.update(self.extract_fat_energy_contributions(log_content))
+        result.update(self.extract_fragment_energies_after_scf(scf_data))
 
         # Process Molcas log file if it exists
         molcas_log_path = self.find_molcas_log(os.path.dirname(log_file_path))
@@ -229,7 +229,7 @@ class ResultExtractor:
 
                     for root, _, files in os.walk(dirpath):
                         log_files = [f for f in files if f.endswith('.log')]
-                        log_files = [f for f in files if (f.endswith('.log') and not f.startswith("dft1_"))]
+                        log_files = [f for f in files if (f.endswith('.log') and not f.startswith("cp2k_"))]
                         for log_file in log_files:
                             log_file_path = os.path.join(root, log_file)
                             result = self.process_cp2k_fat_log(log_file_path)

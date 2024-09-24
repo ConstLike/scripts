@@ -47,7 +47,7 @@ def process_xyz_file(xyz_file: str, config: Dict) -> None:
         )
         output_dir = os.path.join(os.path.dirname(dir_name), subfolder)
 
-    elif config['calc type'] == 'dft1':
+    elif config['calc type'] == 'cp2k':
         generator = CP2KInputGenerator(config)
         subfolder = (
             f"{config['calc type']}_"
@@ -62,12 +62,12 @@ def process_xyz_file(xyz_file: str, config: Dict) -> None:
         basis_set = config['basis set'].lower()
         if calc_type in ['hf', 'dft']:
             functional = config['functional'].lower()
-            subfolder = f"{basis_set}_{calc_type}_{functional}"
+            subfolder = f"molcas_{basis_set}_{calc_type}_{functional}"
         else:
             a1, a2 = config['symm a1'], config['symm a2']
             b1, b2 = config['symm b1'], config['symm b2']
             active_e, active_o = config['active space']
-            subfolder = f"{basis_set}_{calc_type}_{a1}-{b2}-{b1}-{a2}_{active_e}-{active_o}"
+            subfolder = f"molcas_{basis_set}_{calc_type}_{a1}-{b2}-{b1}-{a2}_{active_e}-{active_o}"
         output_dir = os.path.join(dir_name, subfolder)
 
     os.makedirs(output_dir, exist_ok=True)
