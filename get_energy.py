@@ -37,12 +37,12 @@ class ResultExtractor:
     def extract_cp2k_energies(self, log_content: str) -> Dict[str, float]:
         """Extract energy components from CP2K log content."""
         energy_patterns = {
-            "overlap energy": r"Overlap energy of the core charge distribution:\s+([-\d.]+)",
-            "self energy": r"Self energy of the core charge distribution:\s+([-\d.]+)",
-            "core hamiltonian energy": r"Core Hamiltonian energy:\s+([-\d.]+)",
-            "hartree energy": r"Hartree energy:\s+([-\d.]+)",
-            "exchange correlation energy": r"Exchange-correlation energy:\s+([-\d.]+)",
-            "total energy": r"Total energy:\s+([-\d.]+)",
+            "Overlap energy": r"Overlap energy of the core charge distribution:\s+([-\d.]+)",
+            "Self energy": r"Self energy of the core charge distribution:\s+([-\d.]+)",
+            "Core hamiltonian energy": r"Core Hamiltonian energy:\s+([-\d.]+)",
+            "Hartree energy": r"Hartree energy:\s+([-\d.]+)",
+            "XC energy": r"Exchange-correlation energy:\s+([-\d.]+)",
+            "Total energy": r"Total energy:\s+([-\d.]+)",
         }
         energies = {}
         for key, pattern in energy_patterns.items():
@@ -50,6 +50,48 @@ class ResultExtractor:
             if match:
                 energies[key] = float(match.group(1))
         return energies
+
+    def extract_fragment_scf_data(self, log_content: str) -> Dict[str, List[Dict[str, float]]]:
+        fragment_scf_data = {}
+        patterns = {
+            'Steps': r'\*\*\* SCF run converged in\s+(\d+) steps \*\*\*',
+            'Overlap energy': r'Overlap energy of the core charge distribution:\s+([-\d.]+)',
+            'Self energy': r'Self energy of the core charge distribution:\s+([-\d.]+)',
+            'Core Hamiltonian energy': r'Core Hamiltonian energy:\s+([-\d.]+)',
+            'Hartree energy': r'Hartree energy:\s+([-\d.]+)',
+            'XC energy': r'Exchange-correlation energy:\s+([-\d.]+)',
+            'Total energy': r'Total energy:\s+([-\d.]+)',
+            'Cube file': r'The electron density is written in cube file format to the file:\s*([\w.-]+)'
+        }
+
+        scf_block_pattern = re.compile(
+            r'\*\*\* SCF run converged.*?'
+            r'(Mulliken Population Analysis)',
+            re.DOTALL
+        )
+
+        for scf_block in scf_block_pattern.finditer(log_content):
+            scf_data = {}
+            block_content = scf_block.group(0)
+
+            for key, pattern in patterns.items():
+                match = re.search(pattern, block_content)
+                if match:
+                    if key == 'Steps':
+                        scf_data[key] = int(match.group(1))
+                    elif key == 'Cube file':
+                        scf_data[key] = match.group(1)
+                        frag_num = re.search(r'frag(\d+)', match.group(1)).group(1)
+                    else:
+                        scf_data[key] = float(match.group(1))
+
+            if 'Cube file' in scf_data:
+                frag_key = f"SCFs frag {frag_num}"
+                if frag_key not in fragment_scf_data:
+                    fragment_scf_data[frag_key] = []
+                fragment_scf_data[frag_key].append(scf_data)
+
+        return fragment_scf_data
 
     def find_molcas_log(self, directory: str) -> Optional[str]:
         """Find Molcas log file in the given directory."""
@@ -172,6 +214,7 @@ class ResultExtractor:
         result["fat scf data"] = scf_data
         result.update(self.extract_fat_energy_contributions(log_content))
         result.update(self.extract_fragment_energies_after_scf(scf_data))
+        result.update(self.extract_fragment_scf_data(log_content))
 
         # Process Molcas log file if it exists
         molcas_log_path = self.find_molcas_log(os.path.dirname(log_file_path))
@@ -229,7 +272,7 @@ class ResultExtractor:
 
                     for root, _, files in os.walk(dirpath):
                         log_files = [f for f in files if f.endswith('.log')]
-                        log_files = [f for f in files if (f.endswith('.log') and not f.startswith("cp2k_"))]
+                        log_files = [f for f in files if (f.endswith('.log') and not f.startswith("dft1_"))]
                         for log_file in log_files:
                             log_file_path = os.path.join(root, log_file)
                             result = self.process_cp2k_fat_log(log_file_path)

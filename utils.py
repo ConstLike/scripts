@@ -93,15 +93,11 @@ class InputUtils:
             file = os.path.join(xyz_dir, filename)
             with open(file, 'r', encoding="utf-8") as f:
                 num_atoms = int(f.readline().strip())
-                second_line = f.readline().strip().lower()
-                method = 'dft' if 'method=' not in second_line else \
-                         second_line.split('method=')[1].split()[0]
-
             num_electrons = count_electrons(file)
 
             info[filename] = {
                 'atoms': num_atoms,
-                'method': method,
+                'method': 'dft',
                 'electrons': num_electrons,
             }
 

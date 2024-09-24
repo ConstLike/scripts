@@ -34,19 +34,15 @@ class XYZGenerator:
         self.shift_bohr = (0.370424000 + 1.852120000)*ANGSTER_TO_BOHR
         self.shift_a = 0.370424000 + 1.852120000
 
-    def create_xyz_file(self, filename, coords, num_atoms, distance_bohr, method=None):
+    def create_xyz_file(self, filename, coords, num_atoms, distance_bohr ):
         """Create XYZ file with given coordinates and parameters."""
         distance = distance_bohr*BOHR_TO_ANGSTER
         dist_a_true = distance + self.shift_a
         dist_bohr_true = distance_bohr + self.shift_bohr
         with open(filename, 'w', encoding="utf-8") as file:
             file.write(f"{num_atoms}\n")
-            if method:
-                file.write(f"H2/H10 system at d = {dist_a_true:.2f} A = {dist_bohr_true:.2f} "
-                           f"Bboohhrr method={method}\n")
-            else:
-                file.write(f"H2/H10 system at d = {dist_a_true:.2f} A = {dist_bohr_true:.2f} "
-                           f"Bboohhrr\n")
+            file.write(f"H2/H10 system at d = {dist_a_true:.2f} A = {dist_bohr_true:.2f} "
+                       f"Bboohhrr\n")
             for coord in coords:
                 file.write(f"H {coord[0]:.9f} {coord[1]:.9f} {coord[2]:.9f}\n")
 
@@ -59,7 +55,6 @@ class XYZGenerator:
 
         for distance in distances_bohr:
             distance_bohr = distance + self.shift_bohr
-            print(distance_bohr)
             output_dir = (f"{self.config['output dir']}/h2-h10-{distance_bohr:.1f}/"
                           f"h2-h10-{distance_bohr:.1f}_xyz")
             os.makedirs(output_dir, exist_ok=True)
@@ -80,15 +75,13 @@ class XYZGenerator:
                 os.path.join(output_dir, "frag1.xyz"),
                 self.config['frag1'],
                 8,
-                distance,
-                "dft"
+                distance
             )
             self.create_xyz_file(
                 os.path.join(output_dir, "frag2.xyz"),
                 frag2_coords,
                 4,
-                distance,
-                self.config['method']
+                distance
             )
 
         print(f"Generated {len(distances_bohr)} xyz files in '{self.config['output dir']}'.")
@@ -97,7 +90,6 @@ class XYZGenerator:
 def main():
     """Main function to run the XYZ generator."""
     config = {
-        "method": "wf",
         "output dir": "h2-h10_xyz"
     }
     generator = XYZGenerator(config)

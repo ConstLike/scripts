@@ -37,6 +37,9 @@ class CP2KFATInputGenerator:
             self.config['xyz dir'], self.config['fragments']
         )
         self.config['tot atoms'] = self.config['frag info']['tot.xyz']['atoms']
+        emb_frag = self.config['emb frag'][0]
+        method = self.config['emb frag'][1]
+        self.config['frag info'][emb_frag]['method'] = method
 
     def _get_fragments(self) -> List[str]:
         """Get list of fragment XYZ files."""
@@ -203,7 +206,7 @@ class CP2KFATInputGenerator:
     BASIS_SET_FILE_NAME {self.config['basis set file']}
     POTENTIAL_FILE_NAME {self.config['pseudo file']}
 """
-        if method == "wf":
+        if method == "extern":
             content += """    &QS
       FAT_EXTERN T
     &END QS
@@ -248,9 +251,10 @@ class CP2KFATInputGenerator:
         a2, b2 = self.config['symm a2'], self.config['symm b2']
         active_e, _ = self.config['active space']
         n_roots = self.config['num roots']
+        method = self.config['calc type'].split('-')[0]
 
         # > copy $CurrDir/extern_{fragment_number}.ScfOrb $WorkDir/INPORB
-        if self.config['calc type'] == "caspt2":
+        if self.config['calc type'] == "caspt2-in-dft":
             content = f"""> copy $CurrDir/vemb_{fragment_number}.dat $WorkDir
 > copy $CurrDir/../{self.config['mol name']}_xyz/frag{fragment_number}.xyz $WorkDir
 
@@ -298,7 +302,7 @@ class CP2KFATInputGenerator:
   PROP
 
 &GRID_it
-  NAME={self.config['calc type']}
+  NAME={method}
   NPOInts=107 107 107
   GORI
   -9.3611625 -9.3611625 -9.3611625
@@ -306,7 +310,7 @@ class CP2KFATInputGenerator:
   0.0 18.7223250 0.0
   0.0 0.0 18.7223250
 """
-        elif self.config['calc type'] == "casscf":
+        elif self.config['calc type'] == "casscf-in-dft":
             content = f"""> copy $CurrDir/vemb_{fragment_number}.dat $WorkDir
 > copy $CurrDir/../{self.config['mol name']}_xyz/frag{fragment_number}.xyz $WorkDir
 
@@ -351,7 +355,7 @@ class CP2KFATInputGenerator:
 """
             content += f"""
 &GRID_it
-  NAME={self.config['calc type']}
+  NAME={method}
   NPOInts=107 107 107
   GORI
   -9.3611625 -9.3611625 -9.3611625
@@ -359,7 +363,7 @@ class CP2KFATInputGenerator:
   0.0 18.7223250 0.0
   0.0 0.0 18.7223250
 """
-        elif self.config['calc type'] == "dft":
+        elif self.config['calc type'] == "dft-in-dft":
             content = f"""> copy $CurrDir/vemb_{fragment_number}.dat $WorkDir
 > copy $CurrDir/../{self.config['mol name']}_xyz/frag{fragment_number}.xyz $WorkDir
 
@@ -383,7 +387,7 @@ class CP2KFATInputGenerator:
   KSDFT = {self.config['wf functional']}
 
 &GRID_it
-  NAME={self.config['calc type']}
+  NAME={method}
   NPOInts=107 107 107
   GORI
   -9.3611625 -9.3611625 -9.3611625
@@ -396,22 +400,22 @@ class CP2KFATInputGenerator:
     def _generate_molcas_script(self, fragment_number: str) -> str:
         """generate molcas run script for a wf fragment."""
         content = ''
-        method = self.config['calc type']
-        if self.config['calc type'] == 'casscf':
+        method = self.config['calc type'].split('-')[0]
+        if self.config['calc type'] == 'casscf-in-dft':
             content = f"""#!/bin/sh
 pymolcas extern_{fragment_number}.inp | tee extern_{fragment_number}.out
 grep "1 Total energy" extern_{fragment_number}.out | awk '{{ print $8 }}' > extern_{fragment_number}.e
 python2 $MOLCAS/Tools/grid2cube/grid2cube.py extern_{fragment_number}.{method}.lus extern_{fragment_number}_orig.cube
 python3 roll_cubefile.py extern_{fragment_number}_orig.cube extern_{fragment_number}.cube
 """
-        elif self.config['calc type'] == 'caspt2':
+        elif self.config['calc type'] == 'caspt2-in-dft':
             content = f"""#!/bin/sh
 pymolcas extern_{fragment_number}.inp | tee extern_{fragment_number}.out
 grep "CASPT2 Root  1     Total energy" extern_{fragment_number}.out | awk '{{ print $7 }}' > extern_{fragment_number}.e
 python2 $MOLCAS/Tools/grid2cube/grid2cube.py extern_{fragment_number}.{method}.lus extern_{fragment_number}_orig.cube
 python3 roll_cubefile.py extern_{fragment_number}_orig.cube extern_{fragment_number}.cube
 """
-        elif self.config['calc type'] == 'dft':
+        elif self.config['calc type'] == 'dft-in-dft':
             content = f"""#!/bin/sh
 pymolcas extern_{fragment_number}.inp | tee extern_{fragment_number}.out
 grep "Total SCF energy" extern_{fragment_number}.out | awk '{{ print $5 }}' > extern_2.e
@@ -437,23 +441,19 @@ with open(argv[2], "w") as f:
 
     def save_input(self, output_dir: str) -> None:
         """Save the generated input files."""
-        file_name = (f"{self.config['calc type']}-in-dft_{self.config['mol name']}_"
-                     f"{self.config['basis set'].lower()}_"
-                     f"{self.config['functional'].lower()}_"
-                     f"{self.config['pseudo'].lower()}")
+        file_name = f"{self.config['subfolder']}.inp"
         os.makedirs(output_dir, exist_ok=True)
 
         # Save CP2K input
-        cp2k_filename = f"{file_name}.inp"
-        with open(os.path.join(output_dir, cp2k_filename),
+        with open(os.path.join(output_dir, file_name),
                   'w',
                   encoding="utf-8") as f:
             f.write(self.generate_fat_input())
-        print(f"Generated: {os.path.join(output_dir, cp2k_filename)}")
+        print(f"Generated: {os.path.join(output_dir, file_name)}")
 
         # Generate Molcas files for WF fragments
         wf_fragments = [frag for frag, info in self.config['frag info'].items()
-                        if info['method'].lower() == 'wf']
+                        if info['method'].lower() == 'extern']
 
         if wf_fragments:
             # Generate roll_cubefile.py

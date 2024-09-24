@@ -20,7 +20,7 @@ class Runner:
         self.results: List[Dict[str, Any]] = []
         self.start_time = None
         self.end_time = None
-        self.runner = config['runner']
+
         self.output_to_log = config.get('output to log', False)
         self.is_single_file = os.path.isfile(self.input_path)
         self.max_restarts = config.get('max restarts', 3)
@@ -31,6 +31,21 @@ class Runner:
     def log(self, message: str):
         """Simple logging function to stdout."""
         print(f"[Runner] {message}")
+
+    def determine_runner(self, folder_name: str) -> str:
+        """Determines the appropriate runner based on folder name."""
+        folder_lower = folder_name.lower()
+
+        if folder_lower.startswith('fat-molcas'):
+            return 'cp2k.sdbg'
+        elif folder_lower.startswith('fat-cp2k') or folder_lower.startswith('cp2k'):
+            return 'cp2k.sdbg'
+        elif folder_lower.startswith('molcas'):
+            return 'pymolcas'
+        elif folder_lower.startswith('openqp'):
+            return 'openqp'
+        else:
+            raise ValueError(f"Unable to determine runner for folder: {folder_name}")
 
     def run_single_calculation(self, input_file: str) -> Dict[str, Any]:
         base_name = os.path.splitext(os.path.basename(input_file))[0]
@@ -59,13 +74,15 @@ class Runner:
             result["message"] = f"Input file {input_file} not found"
             return result
 
+        runner = self.determine_runner(os.path.basename(os.path.dirname(input_file)))
+
         for attempt in range(self.max_restarts + 1):
             self.log(f"Running calculation for {input_file} "
                      f"(Attempt {attempt + 1}/{self.max_restarts + 1})")
             start_time = time.perf_counter()
 
             try:
-                command = f"{self.runner} {os.path.basename(input_file)}"
+                command = f"{runner} {os.path.basename(input_file)}"
                 if self.output_to_log:
                     with open(os.path.join(output_dir, log_file), 'w') as log_f:
                         subprocess.run(
@@ -144,7 +161,7 @@ class Runner:
             return
 
         with ProcessPoolExecutor(max_workers=self.max_workers) as executor:
-            future_to_file = {executor.submit(self.run_single_calculation, f): f 
+            future_to_file = {executor.submit(self.run_single_calculation, f): f
                               for f in filtered_files}
             for future in as_completed(future_to_file):
                 self.results.append(future.result())
@@ -213,13 +230,12 @@ Total execution time: {self.format_time(total_time)}
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run calculations in parallel")
-    parser.add_argument("runner", help="Runner program")
     parser.add_argument("input_path", help="Path to input file or directory")
     parser.add_argument("--log", action="store_true", help="Write output to log")
     parser.add_argument("--output_dir", help="Output directory for results")
     parser.add_argument("--total_cpus", type=int, default=16, help="Total number of CPUs")
     parser.add_argument("--omp_threads", type=int, default=16, help="OMP threads per calc")
-    parser.add_argument("--max_restarts", type=int, default=3,
+    parser.add_argument("--max_restarts", type=int, default=5,
                         help="Max restarts for segmentation faults")
     parser.add_argument("--spec", type=str, default='', help="Criterion for folder names")
     return parser.parse_args()
@@ -237,7 +253,6 @@ def main():
         output_dir = args.output_dir
 
     config = {
-        'runner': args.runner,
         'input path': args.input_path,
         'output dir': output_dir,
         'total cpus': args.total_cpus,

@@ -18,58 +18,87 @@ def process_xyz_file(xyz_file: str, config: Dict) -> None:
     dir_name = os.path.dirname(os.path.abspath(xyz_file))
     config['mol name'] = os.path.basename(xyz_dir).split('_')[0]
 
-    if config['calc type'] == 'caspt2-in-dft':
-        a1, a2 = config['symm a1'], config['symm a2']
-        b1, b2 = config['symm b1'], config['symm b2']
-        active_e, active_o = config['active space']
-        generator = CP2KFATInputGenerator(config)
-        subfolder = (
-            f"{config['calc type']}_"
-            f"{config['basis set'].lower()}_"
-            f"{config['functional'].lower()}_"
-            f"{config['pseudo'].lower()}_"
-            f"{config['kinetic'].lower()}_"
-            f"{config['wf basis set'].lower()}_"
-            f"{a1}-{b2}-{b1}-{a2}_{active_e}-{active_o}"
-        )
-        output_dir = os.path.join(os.path.dirname(dir_name), subfolder)
-
-    elif config['calc type'] == 'dft-in-dft':
-        generator = CP2KFATInputGenerator(config)
-        subfolder = (
-            f"{config['calc type']}_"
-            f"{config['basis set'].lower()}_"
-            f"{config['functional'].lower()}_"
-            f"{config['pseudo'].lower()}_"
-            f"{config['kinetic'].lower()}_"
-            f"{config['wf basis set'].lower()}_"
-            f"wf-{config['wf functional']}"
-        )
-        output_dir = os.path.join(os.path.dirname(dir_name), subfolder)
-
-    elif config['calc type'] == 'cp2k':
-        generator = CP2KInputGenerator(config)
-        subfolder = (
-            f"{config['calc type']}_"
-            f"{config['basis set'].lower()}_"
-            f"{config['functional'].lower()}_"
-            f"{config['pseudo'].lower()}"
-        )
-        output_dir = os.path.join(os.path.dirname(dir_name), subfolder)
-    else:
-        generator = MolcasInputGenerator(config)
-        calc_type = config['calc type'].lower()
-        basis_set = config['basis set'].lower()
-        if calc_type in ['hf', 'dft']:
-            functional = config['functional'].lower()
-            subfolder = f"molcas_{basis_set}_{calc_type}_{functional}"
-        else:
+    if config['prefix'] == 'fat-molcas':
+        if config['calc type'] == 'caspt2-in-dft':
             a1, a2 = config['symm a1'], config['symm a2']
             b1, b2 = config['symm b1'], config['symm b2']
             active_e, active_o = config['active space']
-            subfolder = f"molcas_{basis_set}_{calc_type}_{a1}-{b2}-{b1}-{a2}_{active_e}-{active_o}"
-        output_dir = os.path.join(dir_name, subfolder)
+            generator = CP2KFATInputGenerator(config)
+            subfolder = (
+                f"{config['prefix']}_"
+                f"{config['calc type']}_"
+                f"{config['basis set'].lower()}_"
+                f"{config['functional'].lower()}_"
+                f"{config['pseudo'].lower()}_"
+                f"{config['kinetic'].lower()}_"
+                f"wf-{config['wf basis set'].lower()}_"
+                f"{a1}-{b2}-{b1}-{a2}_{active_e}-{active_o}"
+            )
+            output_dir = os.path.join(os.path.dirname(dir_name), subfolder)
 
+        elif config['calc type'] == 'dft-in-dft':
+            generator = CP2KFATInputGenerator(config)
+            subfolder = (
+                f"{config['prefix']}_"
+                f"{config['calc type']}_"
+                f"{config['basis set'].lower()}_"
+                f"{config['functional'].lower()}_"
+                f"{config['pseudo'].lower()}_"
+                f"{config['kinetic'].lower()}_"
+                f"wf-{config['wf basis set'].lower()}_"
+                f"wf-{config['wf functional']}"
+            )
+            output_dir = os.path.join(os.path.dirname(dir_name), subfolder)
+
+    elif config['prefix'] == 'fat-cp2k':
+        if config['calc type'] == 'dft-in-dft':
+            generator = CP2KFATInputGenerator(config)
+            subfolder = (
+                f"{config['prefix']}_"
+                f"{config['calc type']}_"
+                f"{config['basis set'].lower()}_"
+                f"{config['functional'].lower()}_"
+                f"{config['pseudo'].lower()}_"
+                f"{config['kinetic'].lower()}"
+            )
+            output_dir = os.path.join(os.path.dirname(dir_name), subfolder)
+
+    elif config['prefix'] == 'cp2k':
+        if config['calc type'] == 'dft':
+            generator = CP2KInputGenerator(config)
+            subfolder = (
+                f"{config['prefix']}_"
+                f"{config['calc type']}_"
+                f"{config['basis set'].lower()}_"
+                f"{config['functional'].lower()}_"
+                f"{config['pseudo'].lower()}"
+            )
+            output_dir = os.path.join(os.path.dirname(dir_name), subfolder)
+
+    elif config['prefix'] == 'molcas':
+        if config['calc type'] in ['hf', 'dft']:
+            generator = MolcasInputGenerator(config)
+            subfolder = (
+                f"{config['prefix']}_"
+                f"{config['calc type']}_"
+                f"{config['basis set'].lower()}_"
+                f"{config['functional'].lower()}"
+            )
+            output_dir = os.path.join(os.path.dirname(dir_name), subfolder)
+        elif config['calc type'] in ['casscf', 'caspt2']:
+            generator = MolcasInputGenerator(config)
+            a1, a2 = config['symm a1'], config['symm a2']
+            b1, b2 = config['symm b1'], config['symm b2']
+            active_e, active_o = config['active space']
+            subfolder = (
+                f"{config['prefix']}_"
+                f"{config['calc type']}_"
+                f"{config['basis set'].lower()}_"
+                f"{a1}-{b1}-{a2}-{b2}_{active_e}-{active_o}"
+            )
+            output_dir = os.path.join(os.path.dirname(dir_name), subfolder)
+
+    config['subfolder'] = subfolder
     os.makedirs(output_dir, exist_ok=True)
     generator.save_input(output_dir)
 
@@ -160,6 +189,7 @@ def main():
 
     config = {
         "OpenMolcas": {
+            "prefix": "molcas",
             "calc type": 'dft',
             "basis set": 'ANO-S',
             "functional": 'lda',
@@ -171,7 +201,9 @@ def main():
             "num roots": 1
         },
         "CP2K WF-in-DFT": {
+            "prefix": "fat-molcas",
             "calc type": "caspt2-in-dft",
+            "emb frag": ["frag2.xyz", "extern"],
             "basis set file": "GTH_BASIS_SETS",
             "basis set": "DZVP-GTH",
             "functional": 'LDA',
@@ -188,8 +220,21 @@ def main():
             'symm a2': 0,
             "num roots": 1
         },
+        "CP2K DFT-in-DFT": {
+            "prefix": "fat-cp2k",
+            "calc type": "dft-in-dft",
+            "emb frag": ["frag2.xyz", "dft"],
+            "basis set file": "GTH_BASIS_SETS",
+            "basis set": "DZVP-GTH",
+            "functional": 'LDA',
+            "kinetic": 'LDA_K_TF',
+            "pseudo file": 'GTH_POTENTIALS',
+            "pseudo": 'GTH-LDA',
+            "cell": [10.0, 10.0, 10.0],
+        },
         "CP2K DFT": {
-            "calc type": "dft1",
+            "prefix": "cp2k",
+            "calc type": "dft",
             "basis set file": "GTH_BASIS_SETS",
             "basis set": "DZVP-GTH",
             "functional": 'LDA',
@@ -201,27 +246,43 @@ def main():
         }
     }
 
-#   basis_sets = ['CC-PVDZ',]
-#   calc_types = ['caspt2',]
-#   functionals = ['lda',]
-#   for basis in basis_sets:
-#       for calc_type in calc_types:
-#           for functional in functionals:
-#               config['OpenMolcas'].update({"basis set": basis})
-#               config['OpenMolcas'].update({"calc type": calc_type})
-#               config['OpenMolcas'].update({"functional": functional})
-#               main_molcas(args, config['OpenMolcas'])
+    basis_sets = ['CC-PVDZ',]
+    calc_types = ['caspt2', 'dft']
+    functionals = ['lda',]
+    for basis in basis_sets:
+        for calc_type in calc_types:
+            for functional in functionals:
+                config['OpenMolcas'].update({"basis set": basis})
+                config['OpenMolcas'].update({"calc type": calc_type})
+                config['OpenMolcas'].update({"functional": functional})
+                main_molcas(args, config['OpenMolcas'])
 
-#   basis_sets = ['DZVP-GTH',]
-#   kinetics = ['LDA_K_TF',]
-#   functionals = ['LDA',]
-#   for basis in basis_sets:
-#       for kinetic in kinetics:
-#           for functional in functionals:
-#               config['CP2K WF-in-DFT'].update({"basis set": basis})
-#               config['CP2K WF-in-DFT'].update({"kinetic": kinetic})
-#               config['CP2K WF-in-DFT'].update({"functional": functional})
-#               main_cp2k_fat(args, config['CP2K WF-in-DFT'])
+    basis_sets = ['DZVP-GTH',]
+    kinetics = ['LDA_K_TF',]
+    calc_types = ['caspt2-in-dft', 'dft-in-dft']
+    functionals = ['lda',]
+    for basis in basis_sets:
+        config['CP2K WF-in-DFT'].update({"basis set": basis})
+        for functional in functionals:
+            config['CP2K WF-in-DFT'].update({"functional": functional})
+            for kinetic in kinetics:
+                config['CP2K WF-in-DFT'].update({"kinetic": kinetic})
+                for calc_type in calc_types:
+                    config['CP2K WF-in-DFT'].update({"calc type": calc_type})
+                    main_cp2k_fat(args, config['CP2K WF-in-DFT'])
+
+    basis_sets = ['DZVP-GTH',]
+    kinetics = ['LDA_K_TF',]
+    calc_types = ['dft-in-dft']
+    for basis in basis_sets:
+        config['CP2K DFT-in-DFT'].update({"basis set": basis})
+        for kinetic in kinetics:
+            config['CP2K DFT-in-DFT'].update({"kinetic": kinetic})
+            for functional in functionals:
+                config['CP2K DFT-in-DFT'].update({"functional": functional})
+                for calc_type in calc_types:
+                    config['CP2K DFT-in-DFT'].update({"calc type": calc_type})
+                    main_cp2k_fat(args, config['CP2K DFT-in-DFT'])
 
     basis_sets = ['DZVP-GTH',]
     kinetics = ['LDA_K_TF',]
