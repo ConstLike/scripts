@@ -18,6 +18,19 @@ class ResultExtractor:
             "calculations": {}
         }
 
+    def determine_calc_type(self, folder_name: str) -> str:
+        """ x"""
+        if folder_name.startswith('cp2k_'):
+            return 'cp2k'
+        elif folder_name.startswith('fat-cp2k_'):
+            return 'fat'
+        elif folder_name.startswith('fat-molcas_'):
+            return 'fat'
+        elif folder_name.startswith('molcas_'):
+            return 'molcas'
+        else:
+            return 'unknown'
+
     def extract_distance(self, xyz_content: str) -> Optional[float]:
         """Extract distance value in Bohr from XYZ file content."""
         match = re.search(r'= ([\d.]+) Bboohhrr', xyz_content)
@@ -52,7 +65,7 @@ class ResultExtractor:
         return energies
 
     def extract_fragment_scf_data(self, log_content: str) -> Dict[str, List[Dict[str, float]]]:
-        fragment_scf_data = {}
+        fragment_scf_data: Dict[str, List[Dict[str, float]]] = {}
         patterns = {
             'Steps': r'\*\*\* SCF run converged in\s+(\d+) steps \*\*\*',
             'Overlap energy': r'Overlap energy of the core charge distribution:\s+([-\d.]+)',
@@ -252,69 +265,59 @@ class ResultExtractor:
 
         return result
 
-    def process_cp2k_fat_directory(self, config: Dict):
-        """Processes a directory with CP2K calculations."""
-        root_dir = config['root dir']
-#       spec = config['spec']
-        for dirpath, _, _ in os.walk(root_dir):
-            xyz_dir = os.path.join(dirpath, f"{os.path.basename(dirpath)}_xyz")
+    def process_directory(self, directory: str):
+        """Processes a directory with calculations."""
+        spec = self.config['spec']
+        for root, dirs, _ in os.walk(directory):
+            xyz_dir = os.path.join(root, f"{os.path.basename(root)}_xyz")
             if os.path.exists(xyz_dir):
-                xyz_file = next(
-                    (f for f in os.listdir(xyz_dir) if f == 'tot.xyz'),
-                    None
-                )
+                xyz_file = next((f for f in os.listdir(xyz_dir) if f == 'tot.xyz'), None)
                 if xyz_file:
-                    with open(os.path.join(xyz_dir, xyz_file),
-                              'r',
-                              encoding="utf-8") as f:
+                    with open(os.path.join(xyz_dir, xyz_file), 'r', encoding="utf-8") as f:
                         xyz_content = f.read()
                     distance = self.extract_distance(xyz_content)
 
-                    for root, _, files in os.walk(dirpath):
-                        log_files = [f for f in files if f.endswith('.log')]
-                        log_files = [f for f in files if (f.endswith('.log') and not f.startswith("dft1_"))]
-                        for log_file in log_files:
-                            log_file_path = os.path.join(root, log_file)
-                            result = self.process_cp2k_fat_log(log_file_path)
-                            result["distance"] = distance
+                    for subdir in dirs:
+                        if spec is None or spec in subdir:
+                            calc_type = self.determine_calc_type(subdir)
+                            subdir_path = os.path.join(root, subdir)
+                            
+                            if calc_type == 'cp2k':
+                                self.process_cp2k_calculation(subdir_path, distance, subdir)
+                            elif calc_type == 'fat':
+                                self.process_fat_calculation(subdir_path, distance, subdir)
+                            elif calc_type == 'molcas':
+                                self.process_molcas_calculation(subdir_path, distance, subdir)
 
-                            calc_type = os.path.basename(root)
-                            if calc_type not in self.results["calculations"]:
-                                self.results["calculations"][calc_type] = []
-                            self.results["calculations"][calc_type].append(result)
+    def process_cp2k_calculation(self, directory: str, distance: float, calc_type: str):
+        for file in os.listdir(directory):
+            if file.endswith('.log'):
+                log_file_path = os.path.join(directory, file)
+                result = self.process_cp2k_log(log_file_path)
+                result["distance"] = distance
+                if calc_type not in self.results["calculations"]:
+                    self.results["calculations"][calc_type] = []
+                self.results["calculations"][calc_type].append(result)
 
-    def process_cp2k_directory(self, config: Dict):
-        """Processes a directory with CP2K calculations."""
-        root_dir = config['root dir']
-        spec = config['spec']
-        for dirpath, _, filenames in os.walk(root_dir):
-            base_dir = os.path.basename(dirpath)
-            xyz_dir = os.path.join(dirpath, f"{base_dir}_xyz")
-            if os.path.exists(xyz_dir):
-                xyz_file = next(
-                    (f for f in os.listdir(xyz_dir) if f == 'tot.xyz'),
-                    None
-                )
-                if xyz_file:
-                    with open(os.path.join(xyz_dir, xyz_file),
-                              'r',
-                              encoding="utf-8") as f:
-                        xyz_content = f.read()
-                    distance = self.extract_distance(xyz_content)
+    def process_fat_calculation(self, directory: str, distance: float, calc_type: str):
+        for file in os.listdir(directory):
+            if file.endswith('.log'):
+                log_file_path = os.path.join(directory, file)
+                result = self.process_cp2k_fat_log(log_file_path)
+                result["distance"] = distance
+                if calc_type not in self.results["calculations"]:
+                    self.results["calculations"][calc_type] = []
+                self.results["calculations"][calc_type].append(result)
 
-                    for root, _, files in os.walk(dirpath):
-                        log_files = [f for f in files if f.endswith('.log')]
-                        if spec is not None:
-                            log_files = [f for f in files if (f.endswith('.log') and f.startswith(spec))]
-                        for log_file in log_files:
-                            log_file_path = os.path.join(root, log_file)
-                            result = self.process_cp2k_log(log_file_path)
-                            result["distance"] = distance
-
-                            calc_type = os.path.basename(root)
-                            if calc_type not in self.results["calculations"]:
-                                self.results["calculations"][calc_type] = []
-                            self.results["calculations"][calc_type].append(result)
+    def process_molcas_calculation(self, directory: str, distance: float, calc_type: str):
+        for file in os.listdir(directory):
+            if file.endswith('.log'):
+                log_file_path = os.path.join(directory, file)
+                result = self.process_molcas_log(log_file_path)
+                result["distance"] = distance
+                if calc_type not in self.results["calculations"]:
+                    self.results["calculations"][calc_type] = []
+                self.results["calculations"][calc_type].append(result)
 
 
     def save_results(self, output_file: str):
@@ -331,12 +334,6 @@ def parse_args():
     parser.add_argument(
         "input",
         help="Input directory with log files or subdirectories"
-    )
-    parser.add_argument(
-        "--type",
-        choices=['molcas', 'fat', 'cp2k'],
-        required=True,
-        help="type of calculation"
     )
     parser.add_argument(
         "--spec",
@@ -357,18 +354,11 @@ def main():
 
     config = {
         "root dir": args.input,
-        "output file": f"{args.type}_results.json",
+        "output file": "results.json",
         "spec": args.spec
     }
     extractor = ResultExtractor(config)
-
-    if args.type == 'molcas':
-        extractor.process_molcas_directory(config["root dir"])
-    elif args.type == 'fat':
-        extractor.process_cp2k_fat_directory(config)
-    elif args.type == 'cp2k':
-        extractor.process_cp2k_directory(config)
-
+    extractor.process_directory(config["root dir"])
     extractor.save_results(config["output file"])
 
 
