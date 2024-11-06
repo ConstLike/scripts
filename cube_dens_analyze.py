@@ -225,9 +225,9 @@ class DensityAnalyzer:
             profile2 = np.mean(data2, axis=tuple(j for j in range(3) if j != i))
             profile_aligned = np.mean(aligned_data, axis=tuple(j for j in range(3) if j != i))
 
-            axes[i].plot(profile1, 'b-', label='Original', alpha=0.7)
-            axes[i].plot(profile2, 'r--', label='Second', alpha=0.7)
-            axes[i].plot(profile_aligned, 'g:', label='Aligned', alpha=0.7)
+            axes[i].plot(profile1, 'b-', label=r'$\rho(r)_\text{tot}$', alpha=0.7)
+            axes[i].plot(profile2, 'r--', label=r'$\rho(r)_\text{molcas}$', alpha=0.7)
+            axes[i].plot(profile_aligned, 'g:', label=r'$\rho(r)_\text{molcas}$ aligned', alpha=0.7)
             axes[i].set_title(f'Density Profile Along {axis}-axis')
             axes[i].grid(True)
             axes[i].legend()
@@ -237,9 +237,9 @@ class DensityAnalyzer:
         diag2 = np.array([data2[i, i, i] for i in range(min(data2.shape))])
         diag_aligned = np.array([aligned_data[i, i, i] for i in range(min(aligned_data.shape))])
 
-        axes[3].plot(diag1, 'b-', label='Original', alpha=0.7)
-        axes[3].plot(diag2, 'r--', label='Second', alpha=0.7)
-        axes[3].plot(diag_aligned, 'g:', label='Aligned', alpha=0.7)
+        axes[3].plot(diag1, 'b-', label=r'$\rho(r)_\text{tot}$', alpha=0.7)
+        axes[3].plot(diag2, 'r--', label=r'$\rho(r)_\text{molcas}$', alpha=0.7)
+        axes[3].plot(diag_aligned, 'g:', label=r'$\rho(r)_\text{molcas}$ aligned', alpha=0.7)
         axes[3].set_title('Density Profile Along Diagonal')
         axes[3].grid(True)
         axes[3].legend()
@@ -386,9 +386,9 @@ class DensityAnalyzer:
         line_x2 = amp2[center_x, center_y, :]
         line_x_aligned = amp_aligned[center_x, center_y, :]
 
-        ax1.plot(line_x1, 'b-', label='Original', alpha=0.7)
-        ax1.plot(line_x2, 'r--', label='Second', alpha=0.7)
-        ax1.plot(line_x_aligned, 'g:', label='Aligned', alpha=0.7)
+        ax1.plot(line_x1, 'b-', label=r'$\rho(G)_\text{tot}$', alpha=0.7)
+        ax1.plot(line_x2, 'r--', label=r'$\rho(G)_\text{molcas}$', alpha=0.7)
+        ax1.plot(line_x_aligned, 'g:', label=r'$\rho(G)_{molcas}$ aligned', alpha=0.7)
         ax1.set_title('Amplitude Profile Along Z-axis')
         ax1.set_xlabel('Frequency index')
         ax1.set_ylabel('Log amplitude')
@@ -488,9 +488,9 @@ class DensityAnalyzer:
             profile2_amp = np.log10(np.abs(profile2) + 1e-10)
             profile_aligned_amp = np.log10(np.abs(profile_aligned) + 1e-10)
 
-            axes[i].plot(profile1_amp, 'b-', label='Original', alpha=0.7)
-            axes[i].plot(profile2_amp, 'r--', label='Second', alpha=0.7)
-            axes[i].plot(profile_aligned_amp, 'g:', label='Aligned', alpha=0.7)
+            axes[i].plot(profile1_amp, 'b-', label=r'$\rho(G)_\text{tot}$', alpha=0.7)
+            axes[i].plot(profile2_amp, 'r--', label=r'$\rho(G)_\text{molcas}$', alpha=0.7)
+            axes[i].plot(profile_aligned_amp, 'g:', label=r'$\rho(G)_\text{molcas}$ aligned', alpha=0.7)
             axes[i].set_title(f'Frequency Profile Along {axis}-axis')
             axes[i].set_xlabel('Frequency index')
             axes[i].set_ylabel('Log amplitude')
@@ -567,8 +567,9 @@ class DensityAnalyzer:
 
 def main():
     """Main execution function."""
+#       'cube1': 'kkk_rho0_frag2_2.cube',
     config = {
-        'cube1': 'kkk_rho0_frag2_2.cube',
+        'cube1': 'kkk_rho0_tot.cube',
         'cube2': 'kkk_rho0_frag2_2_ext.cube',
         'aligned_cube': 'density_aligned.cube',
         'diff_cube': 'density_difference.cube',
