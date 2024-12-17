@@ -3,6 +3,7 @@
 cube_dens_analyze.py
 """
 from typing import Dict, List, Tuple
+import sys
 import numpy as np
 from scipy import fft
 import matplotlib.pyplot as plt
@@ -20,6 +21,21 @@ class DensityAnalyzer:
         self.config.setdefault('diff_cube', 'density_difference.cube')
         self.config.setdefault('aligned_diff_cube',
                                'density_aligned_difference.cube')
+
+        # Add plot configuration
+        self.config['plot'] = {
+            'font family': 'Times New Roman',
+            'font size': 22,
+            'title size': 22,
+            'label size': 18,
+            'tick size': 22,
+            'legend size': 22,
+            'figure size': (15, 15),
+            'dpi': 300,
+            'padding': 3.0,
+            'alpha': 0.7,
+            'grid style': '--'
+        }
 
     def read_cube(self, filename: str) -> Tuple[np.ndarray,
                                                 List[float],
@@ -139,7 +155,7 @@ class DensityAnalyzer:
 
         # Compute normalized cross-power spectrum
         cross_power = fft1 * np.conj(fft2)
-        normalized_cross_power = cross_power / np.abs(cross_power)
+        normalized_cross_power = cross_power / (np.abs(cross_power)+1.0e-10)
 
         # Compute inverse FFT of normalized cross-power spectrum
         correlation = np.real(fft.ifftn(normalized_cross_power))
@@ -174,78 +190,65 @@ class DensityAnalyzer:
 
         return aligned_density, np.array(shifts)
 
-    def cube_analyze_fft2(self, data1: np.ndarray, data2: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """Analyze and align cube data using FFT phase correlation."""
-        # Compute FFT of both densities
-        fft1 = fft.fftn(data1)
-        fft2 = fft.fftn(data2)
-
-        # Compute normalized cross-power spectrum
-        cross_power = fft1 * np.conj(fft2)
-        normalized_cross_power = cross_power / np.abs(cross_power)
-
-        # Compute inverse FFT of normalized cross-power spectrum
-        correlation = np.real(fft.ifftn(normalized_cross_power))
-
-        # Find peak in correlation
-        peak_idx = np.unravel_index(np.argmax(correlation), correlation.shape)
-
-        # Calculate fractional shifts
-        shifts = []
-        for i, sz in zip(peak_idx, data1.shape):
-            if i > sz // 2:
-                shifts.append(i - sz)
-            else:
-                shifts.append(i)
-
-        # Apply shift in frequency domain
-        nx, ny, nz = data1.shape
-        kx = fft.fftfreq(nx)
-        ky = fft.fftfreq(ny)
-        kz = fft.fftfreq(nz)
-
-        Kx, Ky, Kz = np.meshgrid(kx, ky, kz, indexing='ij')
-        phase_shift = -2j * np.pi * (Kx*shifts[0] + Ky*shifts[1] + Kz*shifts[2])
-
-        # Apply shift to second density
-        shifted_fft = fft2 * np.exp(phase_shift)
-        aligned_density = np.real(fft.ifftn(shifted_fft))
-
-        return aligned_density, np.array(shifts)
-
     def plot_density_profiles(self, data1: np.ndarray, data2: np.ndarray,
                               aligned_data: np.ndarray, output_file: str) -> None:
         """Plot density profiles along axes and diagonal."""
-        fig, axes = plt.subplots(2, 2, figsize=(15, 15))
+        plt.rcParams.update({
+            'font.family': self.config['plot']['font family'],
+            'font.size': self.config['plot']['font size'],
+            'axes.titlesize': self.config['plot']['title size'],
+            'axes.labelsize': self.config['plot']['label size'],
+            'xtick.labelsize': self.config['plot']['tick size'],
+            'ytick.labelsize': self.config['plot']['tick size'],
+            'legend.fontsize': self.config['plot']['legend size'],
+            'figure.titlesize': self.config['plot']['title size']
+        })
+
+        fig, axes = plt.subplots(2, 2, figsize=self.config['plot']['figure size'])
         axes = axes.flatten()
+
+        for ax in axes:
+            ax.ticklabel_format(style='sci', scilimits=(-2,2), axis='y')
 
         # Plot along X, Y, Z axes
         for i, axis in enumerate(['X', 'Y', 'Z']):
             profile1 = np.mean(data1, axis=tuple(j for j in range(3) if j != i))
             profile2 = np.mean(data2, axis=tuple(j for j in range(3) if j != i))
-            profile_aligned = np.mean(aligned_data, axis=tuple(j for j in range(3) if j != i))
 
-            axes[i].plot(profile1, 'b-', label=r'$\rho(r)_\text{tot}$', alpha=0.7)
-            axes[i].plot(profile2, 'r--', label=r'$\rho(r)_\text{molcas}$', alpha=0.7)
-            axes[i].plot(profile_aligned, 'g:', label=r'$\rho(r)_\text{molcas}$ aligned', alpha=0.7)
-            axes[i].set_title(f'Density Profile Along {axis}-axis')
-            axes[i].grid(True)
+            axes[i].plot(profile1, 'b-',
+                        label=r'$\rho(r)_\mathrm{cp2k}$',
+                        alpha=self.config['plot']['alpha'])
+            axes[i].plot(profile2, 'r--',
+                        label=r'$\rho(r)_\mathrm{molcas}$',
+                        alpha=self.config['plot']['alpha'])
+
+            axes[i].set_title(f'Density Profile Along {axis}-axis', pad=15)
+            axes[i].set_xlabel('Grid point index')
+            axes[i].set_ylabel(r'$\rho(r)$')
+            axes[i].grid(True, linestyle=self.config['plot']['grid style'],
+                        alpha=self.config['plot']['alpha'])
             axes[i].legend()
 
         # Plot along diagonal
-        diag1 = np.array([data1[i, i, i] for i in range(min(data1.shape))])
-        diag2 = np.array([data2[i, i, i] for i in range(min(data2.shape))])
-        diag_aligned = np.array([aligned_data[i, i, i] for i in range(min(aligned_data.shape))])
+        diag1 = np.array([data1[i,i,i] for i in range(min(data1.shape))])
+        diag2 = np.array([data2[i,i,i] for i in range(min(data2.shape))])
 
-        axes[3].plot(diag1, 'b-', label=r'$\rho(r)_\text{tot}$', alpha=0.7)
-        axes[3].plot(diag2, 'r--', label=r'$\rho(r)_\text{molcas}$', alpha=0.7)
-        axes[3].plot(diag_aligned, 'g:', label=r'$\rho(r)_\text{molcas}$ aligned', alpha=0.7)
-        axes[3].set_title('Density Profile Along Diagonal')
-        axes[3].grid(True)
+        axes[3].plot(diag1, 'b-',
+                    label=r'$\rho(r)_\mathrm{cp2k}$',
+                    alpha=self.config['plot']['alpha'])
+        axes[3].plot(diag2, 'r--',
+                    label=r'$\rho(r)_\mathrm{molcas}$',
+                    alpha=self.config['plot']['alpha'])
+
+        axes[3].set_title('Density Profile Along Diagonal', pad=15)
+        axes[3].set_xlabel('Grid point index')
+        axes[3].set_ylabel(r'Electron density (e/Bohr$^3$)')
+        axes[3].grid(True, linestyle=self.config['plot']['grid style'],
+                    alpha=self.config['plot']['alpha'])
         axes[3].legend()
 
-        plt.tight_layout()
-        plt.savefig(output_file, dpi=300)
+        plt.tight_layout(pad=self.config['plot']['padding'])
+        plt.savefig(output_file, dpi=self.config['plot']['dpi'], bbox_inches='tight')
         plt.close()
 
     def process_densities(self):
@@ -305,18 +308,21 @@ class DensityAnalyzer:
             print(f"Mean abs difference: {axis_stats['mean_abs_diff']:.6e}")
             print(f"RMS difference: {axis_stats['rms_diff']:.6e}")
 
-    def plot_fourier_space_2(self, fft1: np.ndarray, fft2: np.ndarray,
-                             fft_aligned: np.ndarray, output_file: str) -> None:
-        """
-        Plot density distributions in Fourier space with phase differences visualization.
+    def plot_fourier_space(self, fft1: np.ndarray, fft2: np.ndarray,
+                              fft_aligned: np.ndarray, output_file: str) -> None:
+        """Plot density distributions in Fourier space."""
+        plt.rcParams.update({
+            'font.family': self.config['plot']['font family'],
+            'font.size': self.config['plot']['font size'],
+            'axes.titlesize': self.config['plot']['title size'],
+            'axes.labelsize': self.config['plot']['label size'],
+            'xtick.labelsize': self.config['plot']['tick size'],
+            'ytick.labelsize': self.config['plot']['tick size'],
+            'legend.fontsize': self.config['plot']['legend size'],
+            'figure.titlesize': self.config['plot']['title size']
+        })
 
-        Args:
-            fft1: FFT of first density
-            fft2: FFT of second density
-            fft_aligned: FFT of aligned density
-            output_file: Output file name for the plot
-        """
-        # Calculate amplitudes (log scale for better visualization)
+        # Calculate amplitudes
         amp1 = np.log10(np.abs(fft1) + 1e-10)
         amp2 = np.log10(np.abs(fft2) + 1e-10)
         amp_aligned = np.log10(np.abs(fft_aligned) + 1e-10)
@@ -326,127 +332,16 @@ class DensityAnalyzer:
         phase2 = np.angle(fft2)
         phase_aligned = np.angle(fft_aligned)
 
-        # Calculate phase differences
-        phase_diff_orig = np.angle(fft2 / fft1)
-        phase_diff_aligned = np.angle(fft_aligned / fft1)
-
-        # Create figure with subplots for amplitudes, phases and phase differences
-        fig = plt.figure(figsize=(20, 15))
-        gs = fig.add_gridspec(3, 4)
-
-        # Plot amplitudes
-        for i, (amp, title) in enumerate([
-            (amp1, 'Original'),
-            (amp2, 'Second'),
-            (amp_aligned, 'Aligned')
-        ]):
-            ax = fig.add_subplot(gs[0, i])
-            slice_xy = amp[amp.shape[0]//2, :, :]
-            im = ax.imshow(slice_xy, cmap='viridis')
-            ax.set_title(f'{title}\nAmplitude (XY plane)')
-            plt.colorbar(im, ax=ax)
-
-            # Add amplitude difference plot for second and aligned
-            if i > 0:
-                ax = fig.add_subplot(gs[0, 3])
-                diff_slice = slice_xy - amp1[amp1.shape[0]//2, :, :]
-                im = ax.imshow(diff_slice, cmap='RdBu_r')
-                ax.set_title(f'Amplitude Difference\n({title} - Original)')
-                plt.colorbar(im, ax=ax)
-
-        # Plot phases
-        for i, (phase, title) in enumerate([
-            (phase1, 'Original'),
-            (phase2, 'Second'),
-            (phase_aligned, 'Aligned')
-        ]):
-            ax = fig.add_subplot(gs[1, i])
-            slice_xy = phase[phase.shape[0]//2, :, :]
-            im = ax.imshow(slice_xy, cmap='twilight', vmin=-np.pi, vmax=np.pi)
-            ax.set_title(f'{title}\nPhase (XY plane)')
-            plt.colorbar(im, ax=ax)
-
-        # Add phase difference plot
-        ax = fig.add_subplot(gs[1, 3])
-        diff_slice = phase_diff_aligned[phase1.shape[0]//2, :, :]
-        im = ax.imshow(diff_slice, cmap='RdBu_r', vmin=-np.pi, vmax=np.pi)
-        ax.set_title('Phase Difference\n(Aligned - Original)')
-        plt.colorbar(im, ax=ax)
-
-        # Plot frequency profiles
-        ax1 = fig.add_subplot(gs[2, 0:2])
-        ax2 = fig.add_subplot(gs[2, 2:4])
-
-        # Central line profiles
-        center_x = amp1.shape[0]//2
-        center_y = amp1.shape[1]//2
-
-        # Plot amplitude profiles
-        line_x1 = amp1[center_x, center_y, :]
-        line_x2 = amp2[center_x, center_y, :]
-        line_x_aligned = amp_aligned[center_x, center_y, :]
-
-        ax1.plot(line_x1, 'b-', label=r'$\rho(G)_\text{tot}$', alpha=0.7)
-        ax1.plot(line_x2, 'r--', label=r'$\rho(G)_\text{molcas}$', alpha=0.7)
-        ax1.plot(line_x_aligned, 'g:', label=r'$\rho(G)_{molcas}$ aligned', alpha=0.7)
-        ax1.set_title('Amplitude Profile Along Z-axis')
-        ax1.set_xlabel('Frequency index')
-        ax1.set_ylabel('Log amplitude')
-        ax1.grid(True)
-        ax1.legend()
-
-        # Plot phase difference profiles
-        line_phase_diff_orig = phase_diff_orig[center_x, center_y, :]
-        line_phase_diff_aligned = phase_diff_aligned[center_x, center_y, :]
-
-        ax2.plot(line_phase_diff_orig, 'r--', label='Before alignment', alpha=0.7)
-        ax2.plot(line_phase_diff_aligned, 'g-', label='After alignment', alpha=0.7)
-        ax2.set_title('Phase Difference Profile Along Z-axis')
-        ax2.set_xlabel('Frequency index')
-        ax2.set_ylabel('Phase difference (radians)')
-        ax2.set_ylim(-np.pi, np.pi)
-        ax2.grid(True)
-        ax2.legend()
-
-        plt.tight_layout()
-        plt.savefig(output_file, dpi=300, bbox_inches='tight')
-        plt.close()
-
-    def plot_fourier_space(self, fft1: np.ndarray, fft2: np.ndarray,
-                              fft_aligned: np.ndarray, output_file: str) -> None:
-        """
-        Plot density distributions in Fourier space.
-
-        Args:
-            fft1: FFT of first density
-            fft2: FFT of second density
-            fft_aligned: FFT of aligned density (with phase shift applied)
-            output_file: Output file name for the plot
-        """
-        # Calculate amplitudes (log scale for better visualization)
-        # Use the full complex FFT values to preserve phase information
-        amp1 = np.log10(np.abs(fft1) + 1e-10)
-        amp2 = np.log10(np.abs(fft2) + 1e-10)
-        amp_aligned = np.log10(np.abs(fft_aligned) + 1e-10)  # This now includes phase shift effect
-
-        # Calculate phases
-        phase1 = np.angle(fft1)
-        phase2 = np.angle(fft2)
-        phase_aligned = np.angle(fft_aligned)
-
-        # Create figure with subplots
         fig, axes = plt.subplots(2, 3, figsize=(18, 12))
 
         # Plot amplitudes
         for i, (amp, title) in enumerate([
-            (amp1, 'Original Density'),
-            (amp2, 'Second Density'),
+            (amp1, 'cp2k Density'),
+            (amp2, 'molcas Density'),
             (amp_aligned, 'Aligned Density')
         ]):
             # Get central slices
             slice_xy = amp[amp.shape[0]//2, :, :]
-            slice_xz = amp[:, amp.shape[1]//2, :]
-            slice_yz = amp[:, :, amp.shape[2]//2]
 
             # Plot amplitude in XY plane
             im = axes[0, i].imshow(slice_xy, cmap='viridis')
@@ -459,15 +354,18 @@ class DensityAnalyzer:
             axes[1, i].set_title(f'{title}\nPhase (XY plane)')
             plt.colorbar(im, ax=axes[1, i])
 
-        plt.tight_layout()
-        plt.savefig(output_file, dpi=300, bbox_inches='tight')
+        plt.tight_layout(pad=self.config['plot']['padding'])
+        plt.savefig(output_file, dpi=self.config['plot']['dpi'], bbox_inches='tight')
         plt.close()
 
         # Create additional plots for frequency profiles
-        fig, axes = plt.subplots(2, 2, figsize=(15, 15))
+        fig, axes = plt.subplots(2, 2, figsize=self.config['plot']['figure size'])
         axes = axes.flatten()
 
-        # Function to get complex profiles
+        # Enable scientific notation
+        for ax in axes:
+            ax.ticklabel_format(style='sci', scilimits=(-4,4), axis='y')
+
         def get_profiles(data, axis):
             if axis == 0:  # X-axis
                 return np.mean(np.mean(data, axis=2), axis=1)
@@ -478,36 +376,39 @@ class DensityAnalyzer:
 
         # Plot frequency profiles along main axes
         for i, axis in enumerate(['X', 'Y', 'Z']):
-            # Get complex profiles
             profile1 = get_profiles(fft1, i)
             profile2 = get_profiles(fft2, i)
-            profile_aligned = get_profiles(fft_aligned, i)
+#           profile_aligned = get_profiles(fft_aligned, i)
 
-            # Convert to log amplitude
             profile1_amp = np.log10(np.abs(profile1) + 1e-10)
             profile2_amp = np.log10(np.abs(profile2) + 1e-10)
-            profile_aligned_amp = np.log10(np.abs(profile_aligned) + 1e-10)
+#           profile_aligned_amp = np.log10(np.abs(profile_aligned) + 1e-10)
 
-            axes[i].plot(profile1_amp, 'b-', label=r'$\rho(G)_\text{tot}$', alpha=0.7)
-            axes[i].plot(profile2_amp, 'r--', label=r'$\rho(G)_\text{molcas}$', alpha=0.7)
-            axes[i].plot(profile_aligned_amp, 'g:', label=r'$\rho(G)_\text{molcas}$ aligned', alpha=0.7)
+            axes[i].plot(profile1_amp, 'b-',
+                        label=r'$\rho(G)_\mathrm{cp2k}$',
+                        alpha=self.config['plot']['alpha'])
+            axes[i].plot(profile2_amp, 'r--',
+                        label=r'$\rho(G)_\mathrm{molcas}$',
+                        alpha=self.config['plot']['alpha'])
+#           axes[i].plot(profile_aligned_amp, 'g:',
+#                       label=r'$\rho(G)_\mathrm{molcas}$ aligned',
+#                       alpha=self.config['plot']['alpha'])
             axes[i].set_title(f'Frequency Profile Along {axis}-axis')
             axes[i].set_xlabel('Frequency index')
             axes[i].set_ylabel('Log amplitude')
-            axes[i].grid(True)
+            axes[i].grid(True, linestyle=self.config['plot']['grid style'],
+                        alpha=self.config['plot']['alpha'])
             axes[i].legend()
 
         # Plot radially averaged frequency profile
         def radial_profile(data):
-            """Calculate radial profile preserving complex values."""
             center = np.array(data.shape) // 2
             y, x, z = np.ogrid[-center[0]:data.shape[0]-center[0],
-                               -center[1]:data.shape[1]-center[1],
-                               -center[2]:data.shape[2]-center[2]]
+                              -center[1]:data.shape[1]-center[1],
+                              -center[2]:data.shape[2]-center[2]]
             r = np.sqrt(x*x + y*y + z*z)
             r = r.astype(int)
 
-            # Handle complex values
             tbin = np.bincount(r.ravel(), np.abs(data.ravel()))
             nr = np.bincount(r.ravel())
             radialprofile = tbin / nr
@@ -515,19 +416,25 @@ class DensityAnalyzer:
 
         r_profile1 = radial_profile(fft1)
         r_profile2 = radial_profile(fft2)
-        r_profile_aligned = radial_profile(fft_aligned)
+#       r_profile_aligned = radial_profile(fft_aligned)
 
-        axes[3].plot(r_profile1, 'b-', label='Original', alpha=0.7)
-        axes[3].plot(r_profile2, 'r--', label='Second', alpha=0.7)
-        axes[3].plot(r_profile_aligned, 'g:', label='Aligned', alpha=0.7)
+        axes[3].plot(r_profile1, 'b-', label='cp2k',
+                    alpha=self.config['plot']['alpha'])
+        axes[3].plot(r_profile2, 'r--', label='molcas',
+                    alpha=self.config['plot']['alpha'])
+#       axes[3].plot(r_profile_aligned, 'g:', label='Aligned',
+#                   alpha=self.config['plot']['alpha'])
         axes[3].set_title('Radially Averaged Frequency Profile')
         axes[3].set_xlabel('Radial frequency')
         axes[3].set_ylabel('Log amplitude')
-        axes[3].grid(True)
+        axes[3].grid(True, linestyle=self.config['plot']['grid style'],
+                    alpha=self.config['plot']['alpha'])
         axes[3].legend()
 
-        plt.tight_layout()
-        plt.savefig(output_file.replace('.png', '_profiles.png'), dpi=300, bbox_inches='tight')
+        plt.tight_layout(pad=self.config['plot']['padding'])
+        plt.savefig(output_file.replace('.png', '_profiles.png'),
+                    dpi=self.config['plot']['dpi'],
+                    bbox_inches='tight')
         plt.close()
 
     def analyze_fourier_differences(self, fft1: np.ndarray, fft2: np.ndarray, fft_aligned: np.ndarray) -> None:
@@ -567,10 +474,10 @@ class DensityAnalyzer:
 
 def main():
     """Main execution function."""
-#       'cube1': 'kkk_rho0_frag2_2.cube',
+#       'cube1': 'kkk_rho0_tot.cube',
     config = {
-        'cube1': 'kkk_rho0_tot.cube',
-        'cube2': 'kkk_rho0_frag2_2_ext.cube',
+        'cube1': sys.argv[1],
+        'cube2': sys.argv[2],
         'aligned_cube': 'density_aligned.cube',
         'diff_cube': 'density_difference.cube',
         'aligned_diff_cube': 'density_aligned_difference.cube'
