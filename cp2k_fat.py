@@ -149,6 +149,11 @@ class CP2KFATInputGenerator:
   &DFT
     BASIS_SET_FILE_NAME {self.config['basis set file']}
     POTENTIAL_FILE_NAME {self.config['pseudo file']}
+    &MGRID
+      NGRIDS 1
+      CUTOFF 400
+      REL_CUTOFF 400
+    &END MGRID
     &QS
       METHOD GPW
       EPS_DEFAULT 1.0E-8
@@ -205,6 +210,11 @@ class CP2KFATInputGenerator:
   &DFT
     BASIS_SET_FILE_NAME {self.config['basis set file']}
     POTENTIAL_FILE_NAME {self.config['pseudo file']}
+    &MGRID
+      NGRIDS 1
+      CUTOFF 400
+      REL_CUTOFF 400
+    &END MGRID
 """
         if method == "extern":
             content += """    &QS
@@ -303,12 +313,12 @@ class CP2KFATInputGenerator:
 
 &GRID_it
   NAME={method}
-  NPOInts=107 107 107
+  NPOInts=191 191 191
   GORI
-  -9.3611625 -9.3611625 -9.3611625
-  18.7223250 0.0 0.0
-  0.0 18.7223250 0.0
-  0.0 0.0 18.7223250
+  -14.099128569576477 -14.099128569576477 -14.099128569576477
+  28.198257139152954 0.0 0.0
+  0.0 28.198257139152954 0.0
+  0.0 0.0 28.198257139152954
 """
         elif self.config['calc type'] == "casscf-in-dft":
             content = f"""> copy $CurrDir/vemb_{fragment_number}.dat $WorkDir
@@ -356,12 +366,12 @@ class CP2KFATInputGenerator:
             content += f"""
 &GRID_it
   NAME={method}
-  NPOInts=107 107 107
+  NPOInts=191 191 191
   GORI
-  -9.3611625 -9.3611625 -9.3611625
-  18.7223250 0.0 0.0
-  0.0 18.7223250 0.0
-  0.0 0.0 18.7223250
+  -14.099128569576477 -14.099128569576477 -14.099128569576477
+  28.198257139152954 0.0 0.0
+  0.0 28.198257139152954 0.0
+  0.0 0.0 28.198257139152954
 """
         elif self.config['calc type'] == "dft-in-dft":
             content = f"""> copy $CurrDir/vemb_{fragment_number}.dat $WorkDir
@@ -388,12 +398,12 @@ class CP2KFATInputGenerator:
 
 &GRID_it
   NAME={method}
-  NPOInts=107 107 107
+  NPOInts=191 191 191
   GORI
-  -9.3611625 -9.3611625 -9.3611625
-  18.7223250 0.0 0.0
-  0.0 18.7223250 0.0
-  0.0 0.0 18.7223250
+  -14.099128569576477 -14.099128569576477 -14.099128569576477
+  28.198257139152954 0.0 0.0
+  0.0 28.198257139152954 0.0
+  0.0 0.0 28.198257139152954
 """
         return content
 
@@ -418,13 +428,14 @@ python3 roll_cubefile.py extern_{fragment_number}_orig.cube extern_{fragment_num
         elif self.config['calc type'] == 'dft-in-dft':
             content = f"""#!/bin/sh
 pymolcas extern_{fragment_number}.inp | tee extern_{fragment_number}.out
-grep "Total SCF energy" extern_{fragment_number}.out | awk '{{ print $5 }}' > extern_2.e
+#grep "Total SCF energy" extern_{fragment_number}.out | awk '{{ print $5 }}' > extern_2.e
+grep "Total KS-DFT energy" extern_{fragment_number}.out | awk '{{ print $5 }}' > extern_2.e
 python2 $MOLCAS/Tools/grid2cube/grid2cube.py extern_{fragment_number}.{method}.lus extern_{fragment_number}_orig.cube
 python3 roll_cubefile.py extern_{fragment_number}_orig.cube extern_{fragment_number}.cube
 """
         return content
 
-    def _generate_roll_cubefile_script(self) -> str:
+    def _generate_roll_cubefile_script_old(self) -> str:
         """Generate roll_cubefile.py script."""
         return """from sys import argv
 import numpy as np
@@ -434,9 +445,63 @@ with open(argv[1]) as f:
     a = read_cube(f)
 a["origin"] = np.zeros_like(a["origin"])
 nx, ny, nz = a["data"].shape
-a["data"] = np.roll(a["data"], (nx//2, ny//2, nz//2), (0, 1, 2))
+a["data"] = np.roll(a["data"], (-nx//2, -ny//2, -nz//2), (0, 1, 2))
 with open(argv[2], "w") as f:
     write_cube(f, a["atoms"], a["data"], a["origin"])
+"""
+
+    def _generate_roll_cubefile_script(self) -> str:
+        """Generate roll_cubefile.py script."""
+        return """from sys import argv
+import numpy as np
+from ase.io.cube import read_cube, write_cube
+
+with open(argv[1]) as f:
+    a = read_cube(f)
+nx, ny, nz = a["data"].shape
+data_shifted = 0.5 * (np.roll(a["data"], (-nx//2, -ny//2, -nz//2), (0, 1, 2)) 
+                    + np.roll(a["data"], (-nx//2+1, -nx//2+1, -nx//2+1), (0, 1, 2)))
+with open(argv[2], "w") as f:
+    write_cube(f, a["atoms"], data_shifted, a["origin"])
+"""
+
+    def _generate_roll_cubefile_script_fail(self) -> str:
+        """Generate roll_cubefile.py script."""
+        return """from sys import argv
+import numpy as np
+from ase.io.cube import read_cube, write_cube
+from scipy import fft
+
+
+def refine_alignment(data):
+    nx, ny, nz = data.shape
+
+    # Вычисление FFT
+    fft_data = fft.fftn(data)
+
+    # Создание массива сдвигов (на полрешетки)
+    shifts = [
+        (np.roll(data, shift, axis) + np.roll(data, shift + 1, axis)) / 2
+        for shift, axis in [(-nx // 2, 0), (-ny // 2, 1), (-nz // 2, 2)]
+    ]
+    averaged_shifted_data = np.mean(shifts, axis=0)
+
+    # Дополнительная обработка фазовых и амплитудных различий
+    fft_shifted = fft.fftn(averaged_shifted_data)
+    amplitude_ratio = np.abs(fft_data) / (np.abs(fft_shifted) + 1e-10)
+    phase_shift_correction = fft_shifted * amplitude_ratio
+    corrected_data = np.real(fft.ifftn(phase_shift_correction))
+
+    return corrected_data
+
+
+with open(argv[1]) as f:
+    a = read_cube(f)
+
+aligned_data = refine_alignment(a["data"])
+
+with open(argv[2], "w") as f:
+    write_cube(f, a["atoms"], aligned_data, a["origin"])
 """
 
     def save_input(self, output_dir: str) -> None:

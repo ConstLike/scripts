@@ -22,14 +22,14 @@ class ResultExtractor:
         """ x"""
         if folder_name.startswith('cp2k_'):
             return 'cp2k'
-        elif folder_name.startswith('fat-cp2k_'):
+        if folder_name.startswith('fat-cp2k_'):
             return 'fat'
-        elif folder_name.startswith('fat-molcas_'):
+        if folder_name.startswith('fat-molcas_'):
             return 'fat'
-        elif folder_name.startswith('molcas_'):
+        if folder_name.startswith('molcas_'):
             return 'molcas'
-        else:
-            return 'unknown'
+
+        return 'unknown'
 
     def extract_distance(self, xyz_content: str) -> Optional[float]:
         """Extract distance value in Bohr from XYZ file content."""
@@ -137,15 +137,19 @@ class ResultExtractor:
             })
         return scf_data
 
-    def extract_fragment_energies_after_scf(self, scf_data: List[Dict[str, float]]) -> Dict[str, float]:
-        """
-        Extracts fragment energies from the latest iteration of the FAT SCF.
-        """
-        last_iteration = max(scf_data, key=lambda x: x['i_iter'])
+    def extract_fragment_energies_after_scf(self, scf_data: List[Dict]) -> Dict[str, float]:
+        """Extract fragment energies from the latest FAT SCF iteration."""
         frag_energies = {}
+
+        if not scf_data:
+            self.logger.warning("No SCF data found for fragment energy extraction")
+            return frag_energies
+
+        last_iteration = max(scf_data, key=lambda x: x['i_iter'])
         for entry in scf_data:
             if entry['i_iter'] == last_iteration['i_iter']:
                 frag_energies[f"tot energy frag {entry['i_frag']}"] = entry['tot']
+
         return frag_energies
 
     def extract_fat_energy_contributions(self, log_content: str) -> Dict[str, Union[float, List[float]]]:
@@ -212,34 +216,51 @@ class ResultExtractor:
         return result
 
     def process_cp2k_fat_log(self, log_file_path: str) -> Dict[str, Any]:
-        """Processes CP2K FAT log file and extracts data."""
-        result: Dict[str, Any] = {
+        """Process CP2K FAT log file and extract data."""
+        result = {
             "logfile": os.path.abspath(log_file_path)
         }
-        with open(log_file_path, 'r', encoding="utf-8") as f:
-            log_content = f.read()
 
-        energy = self.extract_energy_cp2k(log_content)
-        if energy is not None:
-            result["fat total energy"] = energy
+        try:
+            with open(log_file_path, 'r', encoding="utf-8") as f:
+                log_content = f.read()
 
-        scf_data = self.extract_scf_data(log_content)
-        result["fat scf data"] = scf_data
-        result.update(self.extract_fat_energy_contributions(log_content))
-        result.update(self.extract_fragment_energies_after_scf(scf_data))
-        result.update(self.extract_fragment_scf_data(log_content))
+            # Extract base energy
+            energy = self.extract_energy_cp2k(log_content)
+            if energy is not None:
+                result["fat total energy"] = energy
 
-        # Process Molcas log file if it exists
-        molcas_log_path = self.find_molcas_log(os.path.dirname(log_file_path))
-        if molcas_log_path:
-            with open(molcas_log_path, 'r', encoding="utf-8") as f:
-                molcas_log_content = f.read()
-            for calc_type in ['hf', 'dft', 'casscf', 'caspt2']:
-                energy = self.extract_energy_molcas(molcas_log_content, calc_type)
-                if energy is not None:
-                    result[f"wf total energy {calc_type}"] = energy
+            # Extract SCF data with validation
+            scf_data = self.extract_scf_data(log_content)
+            if scf_data:
+                result["fat scf data"] = scf_data
+                result.update(self.extract_fat_energy_contributions(log_content))
+                result.update(self.extract_fragment_energies_after_scf(scf_data))
+                result.update(self.extract_fragment_scf_data(log_content))
+
+            # Process Molcas log if exists
+            molcas_log = self.find_molcas_log(os.path.dirname(log_file_path))
+            if molcas_log:
+                self.process_molcas_data(molcas_log, result)
+
+        except Exception as e:
+            self.logger.error(f"Error processing {log_file_path}: {str(e)}")
+            result["error"] = str(e)
 
         return result
+
+    def process_molcas_data(self, log_path: str, result: Dict[str, Any]) -> None:
+        """Process Molcas log data and update results."""
+        try:
+            with open(log_path, 'r', encoding="utf-8") as f:
+                content = f.read()
+
+            for calc_type in ['hf', 'dft', 'casscf', 'caspt2']:
+                energy = self.extract_energy_molcas(content, calc_type)
+                if energy is not None:
+                    result[f"wf total energy {calc_type}"] = energy
+        except Exception as e:
+            self.logger.error(f"Error processing Molcas log {log_path}: {str(e)}")
 
     def process_cp2k_log(self, log_file_path: str) -> Dict[str, Any]:
         """Processes CP2K log file and extracts energy data."""
@@ -281,7 +302,7 @@ class ResultExtractor:
                         if spec is None or spec in subdir:
                             calc_type = self.determine_calc_type(subdir)
                             subdir_path = os.path.join(root, subdir)
-                            
+
                             if calc_type == 'cp2k':
                                 self.process_cp2k_calculation(subdir_path, distance, subdir)
                             elif calc_type == 'fat':
@@ -318,7 +339,6 @@ class ResultExtractor:
                 if calc_type not in self.results["calculations"]:
                     self.results["calculations"][calc_type] = []
                 self.results["calculations"][calc_type].append(result)
-
 
     def save_results(self, output_file: str):
         """Save extracted results to a JSON file."""

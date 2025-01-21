@@ -25,6 +25,7 @@ class CP2KInputGenerator:
   PROJECT {self.config['mol name']}
   RUN_TYPE ENERGY_FORCE
   PRINT_LEVEL MEDIUM
+  CALLGRAPH MASTER
 &END GLOBAL
 
 &FORCE_EVAL

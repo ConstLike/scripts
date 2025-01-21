@@ -12,27 +12,35 @@ from typing import Any, Dict, List
 class Runner:
     def __init__(self, config: Dict[str, Any]):
         self.config = config
-        self.input_path = os.path.abspath(config['input path'])
-        self.output_dir = os.path.abspath(config['output dir'])
-        self.total_cpus = config.get('total cpus', os.cpu_count())
-        self.omp_threads = config.get('omp threads', self.total_cpus)
-        self.max_workers = max(1, self.total_cpus // self.omp_threads)
-        self.results: List[Dict[str, Any]] = []
-        self.start_time = None
-        self.end_time = None
+        self.config.update({
+            'total cpus': self.config.get('total cpus', os.cpu_count()),
+            'omp threads': self.config.get('omp threads', 16),
+            'max restarts': self.config.get('max restarts', 3),
+            'output to log': self.config.get('output to log', False),
+            'folder criterion': self.config.get('folder criterion', ''),
+            'input files': [],
+            'results': []
+        })
 
-        self.output_to_log = config.get('output to log', False)
-        self.is_single_file = os.path.isfile(self.input_path)
-        self.max_restarts = config.get('max restarts', 3)
-        self.folder_criterion = config.get('folder criterion', '')
+        self.config['max workers'] = max(1, self.config['total cpus'] //
+                                          self.config['omp threads'])
 
-        os.environ['OMP_NUM_THREADS'] = str(self.omp_threads)
+        os.environ['OMP_NUM_THREADS'] = str(self.config['omp threads'])
 
-    def log(self, message: str):
+        if isinstance(self.config['input path'], str):
+            if os.path.isfile(self.config['input path']):
+                if self.config['input path'].endswith('.inp'):
+                    self.config['input files'] = [self.config['input path']]
+                elif self.config['input path'].endswith('_report.txt'):
+                    self._load_failed_from_report()
+            else:
+                self.config['input files'] = self._find_input_files()
+
+    def _log(self, message: str):
         """Simple logging function to stdout."""
         print(f"[Runner] {message}")
 
-    def determine_runner(self, folder_name: str) -> str:
+    def _determine_runner(self, folder_name: str) -> str:
         """Determines the appropriate runner based on folder name."""
         folder_lower = folder_name.lower()
 
@@ -47,18 +55,39 @@ class Runner:
         else:
             raise ValueError(f"Unable to determine runner for folder: {folder_name}")
 
-    def run_single_calculation(self, input_file: str) -> Dict[str, Any]:
-        base_name = os.path.splitext(os.path.basename(input_file))[0]
-        log_file = f"{base_name}.log"
+    def _find_input_files(self) -> List[str]:
+        """Find all input files in directory that match criteria."""
+        input_files = []
+        input_path = self.config['input path']
+        criterion = self.config['folder criterion']
 
-        if self.is_single_file:
-            output_dir = self.output_dir
+        for root, _, files in os.walk(input_path):
+            if criterion and criterion not in root:
+                continue
+            for file in files:
+                if file.endswith('.inp') and 'extern' not in file:
+                    input_files.append(os.path.join(root, file))
+
+        return sorted(input_files)
+
+    def _run_single_calculation(self, input_file: str) -> Dict[str, Any]:
+        """Run a single calculation with automatic restarts on segfaults."""
+        base_name = os.path.splitext(os.path.basename(input_file))[0]
+        input_dir = os.path.dirname(input_file)
+
+        # For retry from report, use original directory structure
+        if self.config['input path'].endswith('_report.txt'):
+            output_dir = os.path.dirname(input_file)
+        # For single file input
+        elif os.path.isfile(self.config['input path']):
+            output_dir = self.config['output dir']
+        # For directory input
         else:
-            input_dir = os.path.dirname(input_file)
-            output_subdir = os.path.relpath(input_dir, self.input_path)
-            output_dir = os.path.join(self.output_dir, output_subdir)
+            output_subdir = os.path.relpath(input_dir, self.config['input path'])
+            output_dir = os.path.join(self.config['output dir'], output_subdir)
 
         os.makedirs(output_dir, exist_ok=True)
+        log_file = f"{base_name}.log"
 
         result = {
             "input file": input_file,
@@ -74,16 +103,16 @@ class Runner:
             result["message"] = f"Input file {input_file} not found"
             return result
 
-        runner = self.determine_runner(os.path.basename(os.path.dirname(input_file)))
+        runner = self._determine_runner(os.path.basename(input_dir))
 
-        for attempt in range(self.max_restarts + 1):
-            self.log(f"Running calculation for {input_file} "
-                     f"(Attempt {attempt + 1}/{self.max_restarts + 1})")
+        for attempt in range(self.config['max restarts'] + 1):
+            self._log(f"Running calculation for {os.path.abspath(input_file)} "
+                     f"(Attempt {attempt + 1}/{self.config['max restarts'] + 1})")
             start_time = time.perf_counter()
 
             try:
                 command = f"{runner} {os.path.basename(input_file)}"
-                if self.output_to_log:
+                if self.config['output to log']:
                     with open(os.path.join(output_dir, log_file), 'w') as log_f:
                         subprocess.run(
                             command,
@@ -118,9 +147,10 @@ class Runner:
                     result["status"] = "ERROR"
                     result["message"] = f"Error: {str(e)}\nOutput: {e.output}"
                     result["restarts"] += 1
-                    if attempt < self.max_restarts:
-                        self.log(f"Segmentation fault detected. Restarting "
-                                 f"(Attempt {attempt + 2}/{self.max_restarts + 1})")
+                    if attempt < self.config['max restarts']:
+                        self._log(f"Segmentation fault detected. Restarting "
+                                f"(Attempt {attempt + 2}/"
+                                f"{self.config['max restarts'] + 1})")
                         continue
                     else:
                         result["message"] += "\nMax restarts reached."
@@ -132,112 +162,120 @@ class Runner:
         result["execution time"] = time.perf_counter() - start_time
         return result
 
-    def find_input_files(self, directory: str) -> List[str]:
-        input_files = []
-        for root, dirs, files in os.walk(directory):
-            if self.folder_criterion and self.folder_criterion not in root:
-                continue
-            for file in files:
-                if file.endswith('.inp'):
-                    input_files.append(os.path.join(root, file))
-        return input_files
-
-    def run_calculations(self):
-        self.start_time = time.perf_counter()
-
-        if os.path.isfile(self.input_path):
-            if not self.input_path.endswith('.inp'):
-                self.log(f"Error: The file {self.input_path} is not .inp")
-                return
-            input_files = [self.input_path]
-        else:
-            input_files = self.find_input_files(self.input_path)
-
-        filtered_files = [f for f in input_files if "extern" not in f]
-        filtered_files.sort()
-
-        if not filtered_files:
-            self.log("No .inp files found in the specified directory.")
-            return
-
-        with ProcessPoolExecutor(max_workers=self.max_workers) as executor:
-            future_to_file = {executor.submit(self.run_single_calculation, f): f
-                              for f in filtered_files}
-            for future in as_completed(future_to_file):
-                self.results.append(future.result())
-
-        self.results.sort(key=lambda x: x['input file'])
-        self.end_time = time.perf_counter()
-
-    def format_time(self, seconds: float) -> str:
+    def _format_time(self, seconds: float) -> str:
+        """Format time duration in HH:MM:SS.mmm format."""
         hours, rem = divmod(seconds, 3600)
         minutes, seconds = divmod(rem, 60)
         return f"{int(hours):02d}:{int(minutes):02d}:{seconds:06.3f}"
 
-    def generate_report(self) -> str:
-        completed = sum(1 for r in self.results if r['status'] == 'COMPLETED')
-        errors = sum(1 for r in self.results if r['status'] == 'ERROR')
+    def _run_calculations(self) -> None:
+        """Run all calculations in parallel."""
+        self.config['start time'] = time.perf_counter()
 
-        total_time = self.end_time - self.start_time
-        execution_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        if not self.config['input files']:
+            self._log("No input files to process.")
+            return
+
+        with ProcessPoolExecutor(max_workers=self.config['max workers']) as executor:
+            future_to_file = {
+                executor.submit(self._run_single_calculation, f): f
+                for f in self.config['input files']
+            }
+            for future in as_completed(future_to_file):
+                self.config['results'].append(future.result())
+
+        self.config['results'].sort(key=lambda x: x['input file'])
+        self.config['end time'] = time.perf_counter()
+
+
+    def _generate_report(self) -> str:
+        """Generate and save detailed execution report."""
+        is_retry = self.config['input path'].endswith('_report.txt')
+        report_name = "retry_report.txt" if is_retry else "runner_report.txt"
+
+        completed = sum(1 for r in self.config['results']
+                       if r['status'] == 'COMPLETED')
+        errors = sum(1 for r in self.config['results'] if r['status'] == 'ERROR')
+        total_time = self.config['end time'] - self.config['start time']
 
         summary = f"""
 Runner Calculations Report
 --------------------------
-Execution Date: {execution_date}
-Total calculations: {len(self.results)}
+Execution Date: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+Total calculations: {len(self.config['results'])}
 Completed: {completed}
 Errors: {errors}
 
-Folder criterion: {self.folder_criterion}
+Folder criterion: {self.config['folder criterion']}
 
-Input files directory: {self.input_path}
-Output files directory: {self.output_dir}
+Input files directory: {self.config['input path']}
+Output files directory: {self.config['output dir']}
 
-Total CPUs: {self.total_cpus}
-OMP threads per calculation: {self.omp_threads}
-Max parallel calculations: {self.max_workers}
+Total CPUs: {self.config['total cpus']}
+OMP threads per calculation: {self.config['omp threads']}
+Max parallel calculations: {self.config['max workers']}
 
-Total execution time: {self.format_time(total_time)}
-
+Total execution time: {self._format_time(total_time)}
 """
-        detailed_results = "\nDetailed Results:\n"
-        for result in self.results:
-            detailed_results += f"\nCalculation: {result['input file']}\n"
-            detailed_results += f"Status: {result['status']}\n"
-            detailed_results += f"Execution time: "
-            detailed_results += f"{self.format_time(result['execution time'])}\n"
-            detailed_results += f"Restarts: {result['restarts']}\n"
-            detailed_results += f"Message: {result['message']}\n"
 
-        full_report = summary + detailed_results
+        detailed = "\nDetailed Results:\n"
+        for result in self.config['results']:
+            detailed += f"\nCalculation: {result['input file']}\n"
+            detailed += f"Status: {result['status']}\n"
+            detailed += f"Execution time: {self._format_time(result['execution time'])}\n"
+            detailed += f"Restarts: {result['restarts']}\n"
+            detailed += f"Message: {result['message']}\n"
 
-        report_filename = "runner_report.txt"
-        with open(report_filename, 'w') as report_file:
-            report_file.write(full_report)
+        report = summary + detailed
+        with open("runner_report.txt", 'w') as f:
+            f.write(report)
 
-        self.log(f"Report written to {report_filename}")
-
+        self._log("Report written to runner_report.txt")
         return summary
 
+    def _load_failed_from_report(self) -> None:
+        """Load failed calculations from previous report."""
+        try:
+            with open(self.config['input path'], 'r', encoding="utf-8") as f:
+                lines = f.readlines()
+
+            current_input = None
+            current_status = None
+            failed_inputs = []
+
+            for line in lines:
+                if line.startswith("Calculation: "):
+                    current_input = line.split(": ")[1].strip()
+                elif line.startswith("Status: "):
+                    current_status = line.split(": ")[1].strip()
+                    if current_input and current_status == "ERROR":
+                        failed_inputs.append(current_input)
+
+            self.config['input files'] = failed_inputs
+
+        except FileNotFoundError:
+            self._log("No previous runner report found")
+
     def run(self) -> str:
-        self.log(f"Starting Runner calculations in: {self.input_path}")
-        self.run_calculations()
-        report = self.generate_report()
-        self.log("Runner calculations completed")
-        return report
+        """Main execution method that runs calculations and generates report."""
+        self._log(f"Starting Runner calculations")
+        self._run_calculations()
+        return self._generate_report()
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run calculations in parallel")
-    parser.add_argument("input_path", help="Path to input file or directory")
+    parser.add_argument("input_path", help="Path to input file/dir or report")
     parser.add_argument("--log", action="store_true", help="Write output to log")
     parser.add_argument("--output_dir", help="Output directory for results")
-    parser.add_argument("--total_cpus", type=int, default=16, help="Total number of CPUs")
-    parser.add_argument("--omp_threads", type=int, default=16, help="OMP threads per calc")
-    parser.add_argument("--max_restarts", type=int, default=5,
+    parser.add_argument("--total_cpus", type=int, default=16,
+                        help="Total number of CPUs")
+    parser.add_argument("--omp_threads", type=int, default=16,
+                        help="OMP threads per calc")
+    parser.add_argument("--max_restarts", type=int, default=1,
                         help="Max restarts for segmentation faults")
-    parser.add_argument("--spec", type=str, default='', help="Criterion for folder names")
+    parser.add_argument("--spec", type=str, default='',
+                        help="Criterion for folder names")
     return parser.parse_args()
 
 
