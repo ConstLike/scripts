@@ -7,30 +7,25 @@ import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime
 from typing import Any, Dict, List
-import threading
 
 
 class Runner:
     def __init__(self, config: Dict[str, Any]):
         self.config = config
-        self._setup_numa_config()
-        self._numa_counter = 0
-        self._numa_lock = threading.Lock()
-
         self.config.update({
             'total cpus': self.config.get('total cpus', os.cpu_count()),
-            'omp threads': self.config.get('omp threads', 12),
+            'omp threads': self.config.get('omp threads', 16),
             'max restarts': self.config.get('max restarts', 3),
-            'max workers': 2,
             'output to log': self.config.get('output to log', False),
             'folder criterion': self.config.get('folder criterion', ''),
             'input files': [],
             'results': []
         })
 
+        self.config['max workers'] = max(1, self.config['total cpus'] //
+                                          self.config['omp threads'])
+
         os.environ['OMP_NUM_THREADS'] = str(self.config['omp threads'])
-        os.environ['OMP_PLACES'] = 'cores'
-        os.environ['OMP_PROC_BIND'] = 'close'
 
         if isinstance(self.config['input path'], str):
             if os.path.isfile(self.config['input path']):
@@ -40,46 +35,6 @@ class Runner:
                     self._load_failed_from_report()
             else:
                 self.config['input files'] = self._find_input_files()
-
-    def _setup_numa_config(self):
-        """Setup NUMA configuration."""
-        try:
-            numa_info = subprocess.check_output(
-                ['lscpu', '-p=NODE,CORE,CPU'],
-                text=True
-            ).strip().split('\n')
-
-            cpu_map = {}
-            cores_seen = set()
-
-            for line in numa_info:
-                if line.startswith('#'):
-                    continue
-                node, core, cpu = map(int, line.split(','))
-                if core in cores_seen:
-                    continue
-                cores_seen.add(core)
-
-                if node not in cpu_map:
-                    cpu_map[node] = []
-                cpu_map[node].append(cpu)
-
-            self.config.update({
-                'numa nodes': len(cpu_map),
-                'cpu map': cpu_map
-            })
-        except subprocess.CalledProcessError:
-            self.config.update({
-                'numa nodes': 1,
-                'cpu map': {0: list(range(0, os.cpu_count(), 2))}
-            })
-
-    def _get_next_numa_node(self) -> int:
-        """Get next NUMA node in round-robin fashion."""
-        with self._numa_lock:
-            node = self._numa_counter % self.config['numa nodes']
-            self._numa_counter += 1
-            return node
 
     def _log(self, message: str):
         """Simple logging function to stdout."""
@@ -117,8 +72,6 @@ class Runner:
 
     def _run_single_calculation(self, input_file: str) -> Dict[str, Any]:
         """Run a single calculation with automatic restarts on segfaults."""
-        numa_node = self._get_next_numa_node()
-        cpu_list = self.config['cpu map'][numa_node]
         base_name = os.path.splitext(os.path.basename(input_file))[0]
         input_dir = os.path.dirname(input_file)
 
@@ -152,18 +105,13 @@ class Runner:
 
         runner = self._determine_runner(os.path.basename(input_dir))
 
-        env = os.environ.copy()
-        env.update({
-            'GOMP_CPU_AFFINITY': f"{cpu_list[0]}-{cpu_list[-1]}"
-        })
-
         for attempt in range(self.config['max restarts'] + 1):
             self._log(f"Running calculation for {os.path.abspath(input_file)} "
                      f"(Attempt {attempt + 1}/{self.config['max restarts'] + 1})")
             start_time = time.perf_counter()
 
             try:
-                command = f"numactl --cpunodebind={numa_node} --membind={numa_node} {runner} {os.path.basename(input_file)}"
+                command = f"{runner} {os.path.basename(input_file)}"
                 if self.config['output to log']:
                     with open(os.path.join(output_dir, log_file), 'w') as log_f:
                         subprocess.run(
@@ -173,8 +121,7 @@ class Runner:
                             cwd=output_dir,
                             stdout=log_f,
                             stderr=subprocess.STDOUT,
-                            text=True,
-                            env=env
+                            text=True
                         )
                 else:
                     subprocess.run(
@@ -183,8 +130,7 @@ class Runner:
                         check=True,
                         cwd=output_dir,
                         capture_output=True,
-                        text=True,
-                        env=env
+                        text=True
                     )
 
                 with open(os.path.join(output_dir, log_file), 'r') as log_f:
