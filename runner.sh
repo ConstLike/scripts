@@ -6,32 +6,9 @@ DEBUG=0
 # Debug print function
 debug_print() {
     if [ $DEBUG -eq 1 ]; then
-        echo "  Cores per socket: $CORES_PER_SOCKET"
-    echo "  Threads per core: $THREADS_PER_CORE"
-    echo "  NUMA nodes: $NUMA_NODES"
-    echo
-    echo "Run Configuration:"
-    echo "  Input Path: $INPUT_PATH"
-    echo "  Output Directory: $OUTPUT_DIR"
-    echo "  Parallel Jobs: $MAX_JOBS"
-    echo "  Threads per Job: $THREADS_PER_JOB"
-    echo "  Real Cores Only: $([[ $REAL_CORES -eq 1 ]] && echo 'yes' || echo 'no')"
-    echo "  Folder Criterion: $FOLDER_CRITERION"
-    echo
-    echo "Detailed Results:"
-    echo
-
-    # Collect and sort results
-    find "$OUTPUT_DIR" -name "*_status.txt" | while read status_file; do
-        input_file=${status_file%_status.txt}.inp
-        status=$(head -n 1 "$status_file")
-        time=$(grep "TIME:" "$status_file" | cut -d' ' -f2)
-        echo "Calculation: $input_file"
-        echo "Status: $status"
-        echo "Execution Time: $time seconds"
-        echo
-    done
-} >"runner_report.txt"
+        echo "[DEBUG] $(date '+%Y-%m-%d %H:%M:%S') - $*" >&2
+    fi
+}
 
 debug_print "Report generated: runner_report.txt"
 echo "Report generated: runner_report.txt" "[DEBUG] $(date '+%Y-%m-%d %H:%M:%S') - $*" >&2
@@ -41,7 +18,7 @@ echo "Report generated: runner_report.txt" "[DEBUG] $(date '+%Y-%m-%d %H:%M:%S')
 # Get system info with validation
 get_system_info() {
     debug_print "Collecting system information..."
-    
+
     TOTAL_CPUS=$(lscpu | grep "^CPU(s):" | awk '{print $2}')
     CORES_PER_SOCKET=$(lscpu | grep "^Core(s) per socket:" | awk '{print $4}')
     SOCKETS=$(lscpu | grep "^Socket(s):" | awk '{print $2}')
@@ -66,24 +43,24 @@ get_system_info() {
 # Configuration validation
 validate_config() {
     debug_print "Validating configuration..."
-    
+
     local errors=0
-    
+
     if [ "$TOTAL_CPUS" -lt 1 ]; then
         echo "Error: Invalid CPU count: $TOTAL_CPUS"
         errors=$((errors + 1))
     fi
-    
+
     if [ "$CORES_PER_SOCKET" -lt 1 ]; then
         echo "Error: Invalid cores per socket: $CORES_PER_SOCKET"
         errors=$((errors + 1))
     fi
-    
+
     if [ "$THREADS_PER_CORE" -lt 1 ]; then
         echo "Error: Invalid threads per core: $THREADS_PER_CORE"
         errors=$((errors + 1))
     fi
-    
+
     if [ "$NUMA_NODES" -lt 1 ]; then
         echo "Warning: No NUMA nodes detected, setting to 1"
         NUMA_NODES=1
@@ -93,7 +70,7 @@ validate_config() {
         echo "Found $errors configuration errors"
         exit 1
     fi
-    
+
     debug_print "Configuration validation complete"
 }
 
@@ -123,17 +100,17 @@ check_requirements() {
 get_output_dir() {
     local input="$1"
     local output="$2"
-    
+
     debug_print "Resolving output directory..."
     debug_print "Input path: $input"
     debug_print "Specified output: $output"
-    
+
     if [ -n "$output" ]; then
         debug_print "Using specified output directory: $output"
         echo "$output"
         return
     fi
-    
+
     if [ -f "$input" ]; then
         local dir=$(dirname "$(realpath "$input")")
         debug_print "Using input file directory: $dir"
@@ -167,7 +144,7 @@ usage() {
 get_runner() {
     local folder_name="$1"
     debug_print "Determining runner for: $folder_name"
-    
+
     if [[ "${folder_name,,}" == *"fat-molcas"* ]]; then
         debug_print "Selected runner: cp2k.sdbg"
         echo "cp2k.sdbg"
@@ -238,7 +215,7 @@ run_calculation() {
     # NUMA binding
     local job_num=$((PARALLEL_SEQ - 1))
     local numa_node=0
-    
+
     if [ "$NUMA_NODES" -gt 1 ]; then
         numa_node=$((job_num % NUMA_NODES))
     fi
