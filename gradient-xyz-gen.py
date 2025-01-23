@@ -7,6 +7,7 @@ from typing import Dict, List, Tuple
 BOHR_TO_ANGSTER = 0.529177249
 ANGSTER_TO_BOHR = 1.8897259886
 
+
 class GradientXYZGenerator:
     """Generator for H2-H10 embed dissociation XYZ files."""
     def __init__(self, config: Dict):
@@ -31,23 +32,23 @@ class GradientXYZGenerator:
         self.shift_bohr = (0.370424000 + 1.852120000)*ANGSTER_TO_BOHR
         self.shift_a = 0.370424000 + 1.852120000
 
-    def create_xyz_file(self, filename: str, coords: List[List[float]], 
-                       num_atoms: int, distance_bohr: float) -> None:
+    def create_xyz_file(self, filename: str, coords: List[List[float]],
+                        num_atoms: int, distance_bohr: float) -> None:
         """Create XYZ file with given coordinates and parameters."""
         distance = distance_bohr*BOHR_TO_ANGSTER
         dist_a_true = distance + self.shift_a
         dist_bohr_true = distance_bohr + self.shift_bohr
-        
+
         with open(filename, 'w', encoding="utf-8") as file:
             file.write(f"{num_atoms}\n")
             file.write(f"H2/H10 system at d = {dist_a_true:.2f} A = "
-                      f"{dist_bohr_true:.2f} Bboohhrr\n")
+                       f"{dist_bohr_true:.2f} Bboohhrr\n")
             for coord in coords:
                 file.write(f"H {coord[0]:.9f} {coord[1]:.9f} {coord[2]:.9f}\n")
 
-    def generate_perturbed_coords(self, base_coords: List[List[float]], 
-                                atom_idx: int, coord_idx: int, 
-                                sign: int) -> List[List[float]]:
+    def generate_perturbed_coords(self, base_coords: List[List[float]],
+                                  atom_idx: int, coord_idx: int,
+                                  sign: int) -> List[List[float]]:
         """Generate perturbed coordinates for gradient calculation."""
         coords = [coord.copy() for coord in base_coords]
         coords[atom_idx][coord_idx] += sign * self.config['step size']
@@ -55,13 +56,13 @@ class GradientXYZGenerator:
 
     def generate_xyz_files(self):
         """Generate XYZ files for various distances."""
-        distances_bohr = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 
-                         1.8, 2.8, 3.8, 4.8]
+        distances_bohr = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4,
+                          1.8, 2.8, 3.8, 4.8]
 
         for distance in distances_bohr:
             distance_bohr = distance + self.shift_bohr
             output_dir = (f"{self.config['output dir']}/h2-h10-{distance_bohr:.1f}/"
-                         f"h2-h10-{distance_bohr:.1f}_xyz")
+                          f"h2-h10-{distance_bohr:.1f}_xyz")
             os.makedirs(output_dir, exist_ok=True)
 
             # Base geometry
@@ -89,21 +90,21 @@ class GradientXYZGenerator:
                     for sign in [-1, 1]:
                         direction = atom_idx*6 + coord_idx*2 + (sign + 3)//2
                         pert_dir = (f"{self.config['output dir']}/"
-                                  f"h2-h10-{distance_bohr:.1f}/"
-                                  f"h2-h10-{distance_bohr:.1f}-{direction}_xyz")
+                                    f"h2-h10-{distance_bohr:.1f}-{direction}/"
+                                    f"h2-h10-{distance_bohr:.1f}-{direction}_xyz")
                         os.makedirs(pert_dir, exist_ok=True)
-                        
+
                         pert_coords = self.generate_perturbed_coords(
                             tot_coords, atom_idx, coord_idx, sign)
-                        
+
                         self.create_xyz_file(
                             os.path.join(pert_dir, "tot.xyz"),
                             pert_coords, 12, distance
                         )
-                        
+
                         if atom_idx < 8:
                             pert_frag1 = self.generate_perturbed_coords(
-                                self.config['frag1'], 
+                                self.config['frag1'],
                                 atom_idx, coord_idx, sign)
                             self.create_xyz_file(
                                 os.path.join(pert_dir, "frag1.xyz"),
@@ -126,6 +127,7 @@ class GradientXYZGenerator:
                                 pert_frag2, 4, distance
                             )
 
+
 def main():
     """Main function to run the XYZ generator."""
     config = {
@@ -134,6 +136,7 @@ def main():
     }
     generator = GradientXYZGenerator(config)
     generator.generate_xyz_files()
+
 
 if __name__ == "__main__":
     main()
