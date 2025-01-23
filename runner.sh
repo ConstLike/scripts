@@ -110,23 +110,51 @@ run_calculation() {
 
   # Настройка переменных окружения
   export OMP_NUM_THREADS=$TOTAL_CPUS
-  export OMP_STACKSIZE=128M
+  export OMP_STACKSIZE=512M
 
   local log_file="${base_name}.log"
   local status_file="${base_name}_status.txt"
 
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Running $input_file"
-  if taskset -c 0-15 cp2k.ssmp -i "$base_name.inp" >"$log_file" 2>&1; then
-    local end_time=$(date +%s)
-    echo "SUCCESS" >"$status_file"
-    echo "TIME: $((end_time - start_time))" >>"$status_file"
-    return 0
+  # Настройка диапазонов процессоров для каждого сокета
+  local sockets=($(lscpu | grep "Socket(s):" | awk '{print $2}'))
+  local numa_nodes=($(lscpu | grep "NUMA node(s):" | awk '{print $3}'))
+  local numa_cpus=($(lscpu | grep "NUMA node" | awk -F':' '{print $2}' | xargs))
+
+  if [ "$sockets" -eq 1 ]; then
+    # Один сокет, запуск одного процесса
+    if taskset -c "${numa_cpus[0]}" cp2k.ssmp -i "$input_file" >"$base_name.log" 2>&1; then
+      echo "SUCCESS" >"${base_name}_status.txt"
+      return 0
+    else
+      echo "ERROR" >"${base_name}_status.txt"
+      return 1
+    fi
   else
-    local end_time=$(date +%s)
-    echo "ERROR" >"$status_file"
-    echo "TIME: $((end_time - start_time))" >>"$status_file"
-    return 1
+    # Более одного сокета, запуск по одному процессу на каждый сокет
+    for node in $(seq 0 $((numa_nodes - 1))); do
+      local cpu_range=$(lscpu | grep "NUMA node$node CPU(s):" | awk -F':' '{print $2}' | xargs)
+      debug_print "Running on NUMA node $node with CPUs $cpu_range"
+      if taskset -c "$cpu_range" cp2k.ssmp -i "$input_file" >"$base_name.node$node.log" 2>&1 & then
+        echo "SUCCESS NODE $node" >"${base_name}_node${node}_status.txt"
+      else
+        echo "ERROR NODE $node" >"${base_name}_node${node}_status.txt"
+      fi
+    done
+    wait
   fi
+
+  # echo "[$(date '+%Y-%m-%d %H:%M:%S')] Running $input_file"
+  # if taskset -c 0-15 cp2k.ssmp -i "$base_name.inp" >"$log_file" 2>&1; then
+  #   local end_time=$(date +%s)
+  #   echo "SUCCESS" >"$status_file"
+  #   echo "TIME: $((end_time - start_time))" >>"$status_file"
+  #   return 0
+  # else
+  #   local end_time=$(date +%s)
+  #   echo "ERROR" >"$status_file"
+  #   echo "TIME: $((end_time - start_time))" >>"$status_file"
+  #   return 1
+  # fi
 }
 
 # Основная часть скрипта
