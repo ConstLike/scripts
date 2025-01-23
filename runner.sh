@@ -111,15 +111,12 @@ run_calculation() {
   # Настройка переменных окружения
   export OMP_NUM_THREADS=$TOTAL_CPUS
   export OMP_STACKSIZE=128M
-  export OMP_PLACES=cores
-  export OMP_PROC_BIND=close
-  export OMP_WAIT_POLICY=active
 
   local log_file="${base_name}.log"
   local status_file="${base_name}_status.txt"
 
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] Running $input_file"
-  if cp2k.ssmp -i "$base_name.inp" >"$log_file" 2>&1; then
+  if taskset -c 0-15 cp2k.ssmp -i "$base_name.inp" >"$log_file" 2>&1; then
     local end_time=$(date +%s)
     echo "SUCCESS" >"$status_file"
     echo "TIME: $((end_time - start_time))" >>"$status_file"
