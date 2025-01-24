@@ -202,6 +202,30 @@ class ResultExtractor:
         match = re.search(pattern, log_content)
         return float(match.group(1)) if match else None
 
+    def extract_forces(self, log_content: str) -> List[List[float]]:
+        """Extract forces from log content."""
+        forces = []
+        blocks = log_content.split('ATOMIC FORCES in [a.u.]')[1:]
+        if not blocks:
+            return None
+
+        last_block = blocks[-1]
+        in_forces = False
+        for line in last_block.split('\n'):
+            if 'SUM OF ATOMIC FORCES' in line:
+                break
+            if line.strip().startswith('1'):
+                in_forces = True
+            if in_forces and line.strip():
+                parts = line.split()
+                if len(parts) == 6:
+                    forces.append([
+                        float(parts[3]),
+                        float(parts[4]),
+                        float(parts[5])
+                    ])
+        return forces if forces else None
+
     def process_molcas_log(self, log_file_path: str) -> Dict[str, Optional[float]]:
         """Process a single log file and extract energies."""
         result: Dict[str, Union[float, str, None]] = {
@@ -238,6 +262,10 @@ class ResultExtractor:
                 result.update(self.extract_fragment_energies_after_scf(scf_data))
                 result.update(self.extract_fragment_scf_data(log_content))
 
+            forces = self.extract_forces(log_content)
+            if forces:
+                result["forces"] = forces
+
             # Process Molcas log if exists
             molcas_log = self.find_molcas_log(os.path.dirname(log_file_path))
             if molcas_log:
@@ -269,6 +297,10 @@ class ResultExtractor:
         }
         with open(log_file_path, 'r', encoding="utf-8") as f:
             log_content = f.read()
+
+        forces = self.extract_forces(log_content)
+        if forces:
+            result["forces"] = forces
 
         energy_patterns = {
             "overlap energy": r"Overlap energy of the core charge distribution:\s+([-\d.]+)",
