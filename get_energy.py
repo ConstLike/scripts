@@ -343,31 +343,37 @@ class ResultExtractor:
                                 self.process_molcas_calculation(subdir_path, distance, subdir)
 
     def process_cp2k_calculation(self, directory: str, distance: float, calc_type: str):
+        parent_dir = os.path.basename(os.path.dirname(directory))
         for file in os.listdir(directory):
             if file.endswith('.log'):
                 log_file_path = os.path.join(directory, file)
                 result = self.process_cp2k_log(log_file_path)
                 result["distance"] = distance
+                result["parent dir"] = parent_dir
                 if calc_type not in self.results["calculations"]:
                     self.results["calculations"][calc_type] = []
                 self.results["calculations"][calc_type].append(result)
 
     def process_fat_calculation(self, directory: str, distance: float, calc_type: str):
+        parent_dir = os.path.basename(os.path.dirname(directory))
         for file in os.listdir(directory):
             if file.endswith('.log'):
                 log_file_path = os.path.join(directory, file)
                 result = self.process_cp2k_fat_log(log_file_path)
                 result["distance"] = distance
+                result["parent dir"] = parent_dir
                 if calc_type not in self.results["calculations"]:
                     self.results["calculations"][calc_type] = []
                 self.results["calculations"][calc_type].append(result)
 
     def process_molcas_calculation(self, directory: str, distance: float, calc_type: str):
+        parent_dir = os.path.basename(os.path.dirname(directory))
         for file in os.listdir(directory):
             if file.endswith('.log'):
                 log_file_path = os.path.join(directory, file)
                 result = self.process_molcas_log(log_file_path)
                 result["distance"] = distance
+                result["parent dir"] = parent_dir
                 if calc_type not in self.results["calculations"]:
                     self.results["calculations"][calc_type] = []
                 self.results["calculations"][calc_type].append(result)
