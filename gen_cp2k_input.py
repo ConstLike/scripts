@@ -33,10 +33,10 @@ class CP2KInputGenerator:
   &DFT
     BASIS_SET_FILE_NAME {self.basis_path}
     POTENTIAL_FILE_NAME {self.pseudo_path}
-#   &MGRID
-#     CUTOFF {self.cutoff}
-#     REL_CUTOFF {self.rel_cutoff}
-#   &END MGRID
+    &MGRID
+      CUTOFF {self.cutoff}
+      REL_CUTOFF {self.rel_cutoff}
+    &END MGRID
     &QS
       METHOD GPW
       EPS_DEFAULT 1.0E-10
@@ -52,14 +52,6 @@ class CP2KInputGenerator:
 #       ALPHA 0.4
 #       NBROYDEN 8
 #     &END MIXING
-      &OUTER_SCF
-        EPS_SCF 1.0E-8
-        MAX_SCF 10
-      &END
-      &OT
-        MINIMIZER DIIS
-        PRECONDITIONER FULL_SINGLE_INVERSE
-      &END
     &END SCF
 """
         if self.do_hf:
@@ -84,16 +76,7 @@ class CP2KInputGenerator:
       &END XC_FUNCTIONAL
     &END XC
 """
-        input_content += f"""    &PRINT
-      &E_DENSITY_CUBE
-        STRIDE 1 1 1
-      &END E_DENSITY_CUBE
-      &MO_MOLDEN
-        GTO_KIND CARTESIAN
-        NDIGITS 6
-      &END MO_MOLDEN
-    &END PRINT
-  &END DFT
+        input_content += f"""    &END DFT
   &SUBSYS
     &CELL
       ABC {self.cell_size[0]} {self.cell_size[1]} {self.cell_size[2]}
@@ -109,12 +92,8 @@ class CP2KInputGenerator:
   &END SUBSYS
   &PRINT
     &FORCES
-      FILENAME FORCE
-      NDIGITS 10
+      FILENAME __STD_OUT__
     &END FORCES
-    &GRID_INFORMATION
-      FILENAME GRID_INFO
-    &END GRID_INFORMATION
   &END PRINT
 &END FORCE_EVAL
 """

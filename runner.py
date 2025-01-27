@@ -16,7 +16,7 @@ class Runner:
             'total cpus': self.config.get('total cpus', os.cpu_count()),
             'omp threads': self.config.get('omp threads', 16),
             'max restarts': self.config.get('max restarts', 3),
-            'output to log': self.config.get('output to log', False),
+            'output to log': self.config.get('output to log', True),
             'folder criterion': self.config.get('folder criterion', ''),
             'input files': [],
             'results': []
@@ -45,9 +45,9 @@ class Runner:
         folder_lower = folder_name.lower()
 
         if folder_lower.startswith('fat-molcas'):
-            return 'cp2k.sdbg'
+            return 'cp2k.ssmp'
         elif folder_lower.startswith('fat-cp2k') or folder_lower.startswith('cp2k'):
-            return 'cp2k.sdbg'
+            return 'cp2k.ssmp'
         elif folder_lower.startswith('molcas'):
             return 'pymolcas'
         elif folder_lower.startswith('openqp'):
@@ -272,7 +272,7 @@ def parse_args():
                         help="Total number of CPUs")
     parser.add_argument("--omp_threads", type=int, default=16,
                         help="OMP threads per calc")
-    parser.add_argument("--max_restarts", type=int, default=1,
+    parser.add_argument("--max_restarts", type=int, default=4,
                         help="Max restarts for segmentation faults")
     parser.add_argument("--spec", type=str, default='',
                         help="Criterion for folder names")

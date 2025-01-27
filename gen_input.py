@@ -250,9 +250,9 @@ def main():
             "functional": "LDA",
             "pseudo file": "GTH_POTENTIALS",
             "pseudo": "GTH-LDA",
-            "cell": [14.0, 14.0, 14.0],
-            "cutoff": 210,
-            "rel cutoff": 30,
+            "cell": [15.0, 15.0, 15.0],
+            "cutoff": 400,
+            "rel cutoff": 400,
         },
     }
 
